@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AccessVault — Gerenciador de Acessos</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.5.0/lz-string.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -4311,11 +4312,10 @@ function switchSpmTab(tab, el) {
 
 function _buildShareUrl(mode, passHash) {
   const payload = { users, accesses, groups, groupAccesses, mode, passHash: passHash||null, exportedAt: new Date().toISOString() };
-  const json    = JSON.stringify(payload);
-  const bytes   = new TextEncoder().encode(json);
-  const binStr  = Array.from(bytes, b => String.fromCharCode(b)).join('');
-  const encoded = btoa(binStr);
-  return `${location.href.split('?')[0]}?share=${encodeURIComponent(encoded)}`;
+  const json     = JSON.stringify(payload);
+  // LZString compresses then encodes to URL-safe base64 (~60-70% smaller than raw base64)
+  const compressed = LZString.compressToEncodedURIComponent(json);
+  return `${location.href.split('?')[0]}?share=${compressed}`;
 }
 
 async function generateShareLink(mode) {
@@ -4449,9 +4449,14 @@ function _checkShareParam() {
   const share  = params.get('share');
   if (!share) return false;
   try {
-    const binStr  = atob(share);
-    const bytes   = Uint8Array.from(binStr, c => c.charCodeAt(0));
-    const json    = new TextDecoder().decode(bytes);
+    // Try LZString decompression first (new links)
+    let json = LZString.decompressFromEncodedURIComponent(share);
+    // Fallback: old base64 links
+    if (!json) {
+      const binStr = atob(share);
+      const bytes  = Uint8Array.from(binStr, c => c.charCodeAt(0));
+      json = new TextDecoder().decode(bytes);
+    }
     const payload = JSON.parse(json);
     _enterReadonlyMode(payload);
     return true;
