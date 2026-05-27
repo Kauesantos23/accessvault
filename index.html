@@ -887,6 +887,23 @@
     transform: scale(1.04);
   }
 
+  #viewerAuthScreen {
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    background: var(--bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: opacity .4s ease, transform .4s ease;
+  }
+
+  #viewerAuthScreen.hidden {
+    opacity: 0;
+    pointer-events: none;
+    transform: scale(1.04);
+  }
+
   .editor-auth-box {
     width: 100%;
     max-width: 380px;
@@ -2443,11 +2460,18 @@
     <!-- Panel: Visualização -->
     <div class="spm-panel active" id="spm-view">
       <div class="share-link-warning">
-        ⚠️ O link contém <strong>todos os seus dados</strong>, incluindo senhas. Quem receber poderá <strong>apenas visualizar</strong> — sem editar ou excluir.
+        ⚠️ O link contém <strong>todos os seus dados</strong>, incluindo senhas. Quem receber precisará digitar a senha para <strong>visualizar</strong>.
+      </div>
+      <div class="form-group">
+        <label class="form-label">Senha do visualizador</label>
+        <div class="login-input-wrap">
+          <input class="form-input" type="password" id="viewSharePass" placeholder="Digite uma senha para o link de visualização">
+          <button class="toggle-pass-btn" onclick="toggleSettingsPass('viewSharePass')" title="Mostrar/ocultar">👁</button>
+        </div>
       </div>
       <div class="form-group">
         <label class="form-label">Link de visualização</label>
-        <div class="share-link-box" id="shareLinkView">Clique em "Gerar link" para criar.</div>
+        <div class="share-link-box" id="shareLinkView">Defina uma senha e clique em "Gerar link".</div>
       </div>
       <div class="modal-actions" style="justify-content:flex-end;gap:8px;padding-top:0">
         <button class="btn btn-ghost" id="copyShareLinkView" onclick="copyLinkView()" style="display:none">⎘ Copiar</button>
@@ -2480,6 +2504,26 @@
     <div style="padding-top:16px;border-top:1px solid var(--border);margin-top:4px;text-align:right">
       <button class="btn btn-ghost" onclick="closeModal('shareProjectModal')">Fechar</button>
     </div>
+  </div>
+</div>
+
+<!-- VIEWER AUTH SCREEN -->
+<div id="viewerAuthScreen" style="display:none">
+  <div class="editor-auth-box" style="border-color:rgba(124,58,237,0.3);box-shadow:0 0 60px rgba(124,58,237,0.08)">
+    <div class="editor-auth-logo">
+      <div class="editor-auth-icon">👁</div>
+      <div class="editor-auth-title">Acesso de Visualização</div>
+      <div class="editor-auth-sub">Digite a senha para visualizar os dados</div>
+    </div>
+    <div class="editor-auth-error" id="viewerAuthError">Senha incorreta. Tente novamente.</div>
+    <div class="form-group">
+      <label class="form-label">Senha</label>
+      <div class="login-input-wrap">
+        <input class="form-input" type="password" id="viewerAuthInput" placeholder="Digite a senha" onkeydown="if(event.key==='Enter')doViewerAuth()">
+        <button class="toggle-pass-btn" onclick="toggleSettingsPass('viewerAuthInput')" title="Mostrar/ocultar">👁</button>
+      </div>
+    </div>
+    <button class="editor-auth-btn" style="background:var(--accent);color:#000" onclick="doViewerAuth()">Entrar →</button>
   </div>
 </div>
 
@@ -4247,14 +4291,14 @@ async function _hashPass(pass) {
 function openShareProjectModal() {
   ['shareLinkView','shareLinkEditor'].forEach(id => {
     const el = document.getElementById(id);
-    if (el) el.textContent = id === 'shareLinkEditor'
-      ? 'Defina uma senha e clique em "Gerar link".'
-      : 'Clique em "Gerar link" para criar.';
+    if (el) el.textContent = 'Defina uma senha e clique em "Gerar link".';
   });
   document.getElementById('copyShareLinkView').style.display   = 'none';
   document.getElementById('copyShareLinkEditor').style.display = 'none';
-  const p = document.getElementById('editorSharePass');
-  if (p) p.value = '';
+  const vp = document.getElementById('viewSharePass');
+  if (vp) vp.value = '';
+  const ep = document.getElementById('editorSharePass');
+  if (ep) ep.value = '';
   document.getElementById('shareProjectModal').classList.add('open');
 }
 
@@ -4277,7 +4321,11 @@ function _buildShareUrl(mode, passHash) {
 async function generateShareLink(mode) {
   try {
     let passHash = null;
-    if (mode === 'editor') {
+    if (mode === 'view') {
+      const pass = document.getElementById('viewSharePass').value;
+      if (!pass) { toast('⚠️', 'Defina uma senha para o link de visualização'); return; }
+      passHash = await _hashPass(pass);
+    } else if (mode === 'editor') {
       const pass = document.getElementById('editorSharePass').value;
       if (!pass) { toast('⚠️', 'Defina uma senha para o link de editor'); return; }
       passHash = await _hashPass(pass);
@@ -4299,6 +4347,41 @@ function copyLinkView()   { navigator.clipboard.writeText(document.getElementByI
 function copyLinkEditor() { navigator.clipboard.writeText(document.getElementById('shareLinkEditor').textContent).then(()=>toast('⎘','Link copiado!')); }
 function copyShareLink()  { copyLinkView(); }
 
+let _pendingViewerPayload = null;
+
+function doViewerAuth() {
+  const input = document.getElementById('viewerAuthInput');
+  const err   = document.getElementById('viewerAuthError');
+  _hashPass(input.value).then(hash => {
+    if (_pendingViewerPayload && hash === _pendingViewerPayload.passHash) {
+      err.classList.remove('show');
+      const screen = document.getElementById('viewerAuthScreen');
+      screen.classList.add('hidden');
+      setTimeout(() => { screen.style.display = 'none'; }, 400);
+      _activateViewerMode(_pendingViewerPayload);
+      renderUsers(); renderGroups();
+      if (users.length > 0) selectUser(users[0].id);
+    } else {
+      err.classList.add('show');
+      input.value = '';
+      input.focus();
+    }
+  });
+}
+
+function _activateViewerMode(payload) {
+  save = function() {};
+  const banner = document.createElement('div');
+  banner.className = 'readonly-banner mode-view';
+  banner.innerHTML = `
+    <span class="readonly-banner-icon">👁</span>
+    <span>Somente leitura</span>
+    <button class="readonly-banner-close" onclick="this.closest('.readonly-banner').style.display='none'" title="Fechar">✕</button>
+  `;
+  document.body.prepend(banner);
+  document.body.classList.add('readonly-mode');
+}
+
 function doEditorAuth() {
   const input = document.getElementById('editorAuthInput');
   const err   = document.getElementById('editorAuthError');
@@ -4309,6 +4392,8 @@ function doEditorAuth() {
       screen.classList.add('hidden');
       setTimeout(() => { screen.style.display = 'none'; }, 400);
       _activateEditorMode(_pendingEditorPayload);
+      renderUsers(); renderGroups();
+      if (users.length > 0) selectUser(users[0].id);
     } else {
       err.classList.add('show');
       input.value = '';
@@ -4338,17 +4423,14 @@ function _enterReadonlyMode(payload) {
   document.getElementById('loginScreen').style.display = 'none';
 
   if (mode === 'view') {
-    save = function() {};
-    _readonlyMode = true;
-    const banner = document.createElement('div');
-    banner.className = 'readonly-banner mode-view';
-    banner.innerHTML = `
-      <span class="readonly-banner-icon">👁</span>
-      <span>Somente leitura</span>
-      <button class="readonly-banner-close" onclick="this.closest('.readonly-banner').style.display='none'" title="Fechar">✕</button>
-    `;
-    document.body.prepend(banner);
-    document.body.classList.add('readonly-mode');
+    if (payload.passHash) {
+      _pendingViewerPayload = payload;
+      const screen = document.getElementById('viewerAuthScreen');
+      screen.style.display = 'flex';
+      setTimeout(() => document.getElementById('viewerAuthInput').focus(), 100);
+    } else {
+      _activateViewerMode(payload);
+    }
 
   } else if (mode === 'editor') {
     if (payload.passHash) {
