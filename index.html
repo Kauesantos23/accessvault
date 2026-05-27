@@ -809,27 +809,48 @@
   /* ——— READONLY MODE ——— */
   .readonly-banner {
     position: fixed;
-    top: 0; left: 0; right: 0;
+    bottom: 16px;
+    right: 16px;
+    top: auto; left: auto;
     z-index: 9000;
     font-family: 'JetBrains Mono', monospace;
-    font-size: 12px;
-    font-weight: 600;
-    padding: 10px 20px;
+    font-size: 10px;
+    font-weight: 500;
+    padding: 6px 10px 6px 10px;
     display: flex;
     align-items: center;
-    justify-content: center;
-    gap: 10px;
-    letter-spacing: 0.3px;
-    box-shadow: 0 2px 20px rgba(0,0,0,.4);
+    gap: 6px;
+    letter-spacing: 0.2px;
+    border-radius: 20px;
+    box-shadow: 0 2px 12px rgba(0,0,0,.4);
+    opacity: 0.7;
+    transition: opacity .2s;
   }
 
-  .readonly-banner.mode-view   { background: linear-gradient(90deg, rgba(124,58,237,0.95), rgba(0,229,255,0.85)); color: #000; }
-  .readonly-banner.mode-editor { background: linear-gradient(90deg, rgba(16,185,129,0.95), rgba(0,229,255,0.80)); color: #000; }
+  .readonly-banner:hover { opacity: 1; }
 
-  .readonly-banner-icon { font-size: 15px; }
+  .readonly-banner.mode-view   { background: rgba(30,20,50,0.92); color: #a78bfa; border: 1px solid rgba(124,58,237,0.35); }
+  .readonly-banner.mode-editor { background: rgba(10,30,25,0.92); color: #6ee7b7; border: 1px solid rgba(16,185,129,0.35); }
 
-  body.readonly-mode .app    { margin-top: 40px; }
-  body.editor-mode   .app    { margin-top: 40px; }
+  .readonly-banner-icon { font-size: 11px; }
+
+  .readonly-banner-close {
+    background: rgba(255,255,255,0.1);
+    border: none;
+    border-radius: 50%;
+    width: 15px; height: 15px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 8px;
+    color: inherit;
+    cursor: pointer;
+    transition: background .15s;
+    flex-shrink: 0;
+    margin-left: 2px;
+  }
+  .readonly-banner-close:hover { background: rgba(255,255,255,0.25); }
+
+  body.readonly-mode .app    { margin-top: 0; }
+  body.editor-mode   .app    { margin-top: 0; }
 
   body.readonly-mode .add-user-btn,
   body.readonly-mode .btn-primary,
@@ -4301,8 +4322,8 @@ function _activateEditorMode(payload) {
   banner.className = 'readonly-banner mode-editor';
   banner.innerHTML = `
     <span class="readonly-banner-icon">✏️</span>
-    <span>Modo editor — suas alterações ficam salvas no seu navegador</span>
-    ${payload.exportedAt ? `<span style="opacity:.6;font-weight:400">· dados de ${new Date(payload.exportedAt).toLocaleDateString('pt-BR')}</span>` : ''}
+    <span>Modo editor</span>
+    <button class="readonly-banner-close" onclick="this.closest('.readonly-banner').style.display='none'" title="Fechar">✕</button>
   `;
   document.body.prepend(banner);
   document.body.classList.add('editor-mode');
@@ -4323,8 +4344,8 @@ function _enterReadonlyMode(payload) {
     banner.className = 'readonly-banner mode-view';
     banner.innerHTML = `
       <span class="readonly-banner-icon">👁</span>
-      <span>Modo somente leitura — você está visualizando dados compartilhados</span>
-      ${payload.exportedAt ? `<span style="opacity:.6;font-weight:400">· exportado em ${new Date(payload.exportedAt).toLocaleDateString('pt-BR')}</span>` : ''}
+      <span>Somente leitura</span>
+      <button class="readonly-banner-close" onclick="this.closest('.readonly-banner').style.display='none'" title="Fechar">✕</button>
     `;
     document.body.prepend(banner);
     document.body.classList.add('readonly-mode');
