@@ -1,0 +1,4617 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AccessVault — Gerenciador de Acessos</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #111118;
+    --surface2: #1a1a24;
+    --surface3: #22222f;
+    --border: #2a2a3a;
+    --accent: #00e5ff;
+    --accent2: #7c3aed;
+    --accent3: #10b981;
+    --danger: #ef4444;
+    --warn: #f59e0b;
+    --text: #e8e8f0;
+    --text2: #9090a8;
+    --text3: #50506a;
+    --glow: 0 0 20px rgba(0,229,255,0.15);
+    --glow2: 0 0 40px rgba(124,58,237,0.1);
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Noise texture overlay */
+  body::before {
+    content:'';
+    position:fixed;
+    inset:0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+    pointer-events:none;
+    z-index:9999;
+    opacity:.4;
+  }
+
+  /* Grid background */
+  body::after {
+    content:'';
+    position:fixed;
+    inset:0;
+    background-image:
+      linear-gradient(rgba(0,229,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,229,255,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events:none;
+    z-index:0;
+  }
+
+  /* ——— LAYOUT ——— */
+  .app { position:relative; z-index:1; display:grid; grid-template-columns:280px 1fr; min-height:100vh; }
+
+  /* ——— SIDEBAR ——— */
+  .sidebar {
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display:flex; flex-direction:column;
+    position:sticky; top:0; height:100vh;
+    overflow-y:auto;
+  }
+
+  .logo {
+    padding: 28px 24px 20px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .logo-mark {
+    font-family:'Syne',sans-serif;
+    font-size:20px;
+    font-weight:800;
+    letter-spacing:-0.5px;
+    color: var(--accent);
+    text-shadow: var(--glow);
+  }
+
+  .logo-sub {
+    font-size:10px;
+    color: var(--text3);
+    letter-spacing:2px;
+    text-transform:uppercase;
+    margin-top:3px;
+  }
+
+  .sidebar-section {
+    padding: 20px 16px 8px;
+  }
+
+  .sidebar-label {
+    font-size:9px;
+    letter-spacing:3px;
+    text-transform:uppercase;
+    color: var(--text3);
+    padding: 0 8px;
+    margin-bottom:8px;
+  }
+
+  .user-item {
+    display:flex; align-items:center; gap:12px;
+    padding: 10px 12px;
+    border-radius:8px;
+    cursor:pointer;
+    transition: all .15s ease;
+    border: 1px solid transparent;
+    margin-bottom:2px;
+  }
+
+  .user-item:hover { background:var(--surface2); border-color:var(--border); }
+
+  .user-item.active {
+    background: rgba(0,229,255,0.06);
+    border-color: rgba(0,229,255,0.2);
+    box-shadow: 0 0 20px rgba(0,229,255,0.05);
+  }
+
+  .avatar {
+    width:34px; height:34px; border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    font-family:'Syne',sans-serif;
+    font-weight:700; font-size:13px;
+    flex-shrink:0;
+    position:relative;
+  }
+
+  .avatar::after {
+    content:'';
+    position:absolute;
+    inset:-2px;
+    border-radius:50%;
+    border: 1.5px solid transparent;
+    transition: border-color .2s;
+  }
+
+  .user-item.active .avatar::after { border-color: var(--accent); }
+
+  .user-info { flex:1; min-width:0; }
+  .user-name { font-size:13px; font-weight:500; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .user-role { font-size:10px; color:var(--text3); margin-top:1px; }
+
+  .access-badge {
+    font-size:10px;
+    background:var(--surface3);
+    color:var(--text2);
+    padding:2px 7px;
+    border-radius:20px;
+    border:1px solid var(--border);
+  }
+
+  .user-item.active .access-badge { background:rgba(0,229,255,0.1); color:var(--accent); border-color:rgba(0,229,255,0.2); }
+
+  .add-user-btn {
+    margin:12px 16px;
+    padding:11px 16px;
+    background:transparent;
+    border:1px dashed var(--border);
+    border-radius:8px;
+    color:var(--text3);
+    font-family:'JetBrains Mono',monospace;
+    font-size:12px;
+    cursor:pointer;
+    display:flex; align-items:center; gap:8px;
+    transition: all .2s;
+    width: calc(100% - 32px);
+  }
+
+  .add-user-btn:hover { border-color:var(--accent); color:var(--accent); background:rgba(0,229,255,0.04); }
+
+  /* ——— MAIN ——— */
+  .main { display:flex; flex-direction:column; min-height:100vh; }
+
+  /* ——— HEADER ——— */
+  .header {
+    padding:24px 32px;
+    border-bottom:1px solid var(--border);
+    display:flex; align-items:center; justify-content:space-between;
+    background: rgba(10,10,15,0.8);
+    backdrop-filter:blur(12px);
+    position:sticky; top:0; z-index:10;
+  }
+
+  .header-left h1 {
+    font-family:'Syne',sans-serif;
+    font-size:22px;
+    font-weight:800;
+    letter-spacing:-0.5px;
+  }
+
+  .header-left p { font-size:11px; color:var(--text3); margin-top:3px; }
+
+  .header-actions { display:flex; gap:10px; }
+
+  .btn {
+    display:inline-flex; align-items:center; gap:8px;
+    padding:9px 16px;
+    border-radius:7px;
+    font-family:'JetBrains Mono',monospace;
+    font-size:12px;
+    font-weight:500;
+    cursor:pointer;
+    transition:all .15s;
+    border:1px solid transparent;
+  }
+
+  .btn-primary {
+    background:var(--accent);
+    color:#000;
+    border-color:var(--accent);
+  }
+  .btn-primary:hover { background:#00c8e0; box-shadow:var(--glow); }
+
+  .btn-ghost {
+    background:transparent;
+    color:var(--text2);
+    border-color:var(--border);
+  }
+  .btn-ghost:hover { background:var(--surface2); color:var(--text); border-color:var(--text3); }
+
+  .btn-danger {
+    background:transparent;
+    color:var(--danger);
+    border-color:rgba(239,68,68,0.3);
+  }
+  .btn-danger:hover { background:rgba(239,68,68,0.1); }
+
+  /* ——— CONTENT ——— */
+  .content { flex:1; padding:32px; }
+
+  /* ——— EMPTY STATE ——— */
+  .empty-state {
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    min-height:400px; gap:16px; text-align:center;
+  }
+
+  .empty-icon {
+    width:64px; height:64px;
+    border-radius:16px;
+    background:var(--surface2);
+    border:1px solid var(--border);
+    display:flex; align-items:center; justify-content:center;
+    font-size:28px;
+  }
+
+  .empty-state h2 { font-family:'Syne',sans-serif; font-size:20px; font-weight:700; }
+  .empty-state p { font-size:12px; color:var(--text3); max-width:300px; line-height:1.6; }
+
+  /* ——— USER DETAIL ——— */
+  .user-detail { animation: fadeIn .2s ease; }
+
+  @keyframes fadeIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+
+  .detail-header {
+    display:flex; align-items:center; gap:20px;
+    padding:24px 28px;
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:14px;
+    margin-bottom:24px;
+    position:relative;
+    overflow:hidden;
+  }
+
+  .detail-header::before {
+    content:'';
+    position:absolute;
+    top:-30px; right:-30px;
+    width:150px; height:150px;
+    border-radius:50%;
+    filter:blur(60px);
+    opacity:.3;
+  }
+
+  .detail-avatar {
+    width:60px; height:60px; border-radius:14px;
+    display:flex; align-items:center; justify-content:center;
+    font-family:'Syne',sans-serif;
+    font-weight:800; font-size:22px;
+    position:relative;
+    flex-shrink:0;
+  }
+
+  .detail-info { flex:1; }
+  .detail-name { font-family:'Syne',sans-serif; font-size:24px; font-weight:800; letter-spacing:-0.5px; }
+  .detail-meta { font-size:11px; color:var(--text3); margin-top:4px; display:flex; gap:16px; }
+  .detail-meta span { display:flex; align-items:center; gap:5px; }
+
+  .stats-row {
+    display:grid; grid-template-columns:repeat(3,1fr); gap:12px;
+    margin-bottom:24px;
+  }
+
+  .stat-card {
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:10px;
+    padding:16px 20px;
+    transition: border-color .2s;
+  }
+
+  .stat-card:hover { border-color:var(--text3); }
+
+  .stat-label { font-size:10px; color:var(--text3); letter-spacing:2px; text-transform:uppercase; }
+  .stat-value { font-family:'Syne',sans-serif; font-size:28px; font-weight:800; margin-top:4px; }
+  .stat-sub { font-size:10px; color:var(--text3); margin-top:2px; }
+
+  /* ——— ACCESS SECTION ——— */
+  .section-header {
+    display:flex; align-items:center; justify-content:space-between;
+    margin-bottom:16px;
+  }
+
+  .section-title {
+    font-family:'Syne',sans-serif;
+    font-size:14px; font-weight:700;
+    letter-spacing:.5px;
+    display:flex; align-items:center; gap:8px;
+  }
+
+  .access-grid {
+    display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:12px;
+  }
+
+  .access-card {
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:10px;
+    padding:16px 18px;
+    transition:all .2s;
+    position:relative;
+    overflow:hidden;
+    animation: slideIn .2s ease both;
+  }
+
+  @keyframes slideIn { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
+
+  .access-card:hover { border-color:var(--text3); transform:translateY(-1px); }
+
+  .access-card::before {
+    content:'';
+    position:absolute;
+    left:0; top:0; bottom:0;
+    width:3px;
+    border-radius:3px 0 0 3px;
+  }
+
+  .access-card-head { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:12px; }
+  .access-icon { font-size:22px; }
+  .access-type-badge {
+    font-size:9px; letter-spacing:1.5px; text-transform:uppercase;
+    padding:3px 8px; border-radius:20px;
+    font-weight:600;
+  }
+
+  .access-title { font-size:14px; font-weight:500; color:var(--text); margin-bottom:4px; }
+  .access-url { font-size:11px; color:var(--text3); margin-bottom:12px; word-break:break-all; }
+
+  .access-creds { background:var(--surface2); border-radius:6px; padding:10px 12px; }
+  .cred-row { display:flex; justify-content:space-between; align-items:center; font-size:11px; margin-bottom:5px; }
+  .cred-row:last-child { margin-bottom:0; }
+  .cred-label { color:var(--text3); }
+  .cred-val { color:var(--text); display:flex; align-items:center; gap:6px; }
+
+  .copy-btn {
+    background:none; border:none; color:var(--text3); cursor:pointer;
+    font-size:10px; padding:1px 4px; border-radius:3px;
+    transition:color .15s;
+    font-family:inherit;
+  }
+  .copy-btn:hover { color:var(--accent); }
+
+  .pass-dots { letter-spacing:2px; }
+
+  .reveal-btn {
+    background:none; border:none; color:var(--text3); cursor:pointer;
+    font-size:10px; padding:1px 4px; border-radius:3px;
+    transition:color .15s; font-family:inherit;
+  }
+  .reveal-btn:hover { color:var(--accent); }
+
+  .access-footer { display:flex; justify-content:space-between; align-items:center; margin-top:12px; padding-top:10px; border-top:1px solid var(--border); }
+  .access-date { font-size:10px; color:var(--text3); }
+  .delete-access-btn { background:none; border:none; color:var(--text3); cursor:pointer; font-size:12px; transition:color .15s; }
+  .delete-access-btn:hover { color:var(--danger); }
+
+  /* ——— MODALS ——— */
+  .overlay {
+    position:fixed; inset:0; z-index:100;
+    background:rgba(0,0,0,0.7);
+    backdrop-filter:blur(4px);
+    display:flex; align-items:center; justify-content:center;
+    opacity:0; pointer-events:none; transition:opacity .2s;
+  }
+  .overlay.open { opacity:1; pointer-events:all; }
+
+  .modal {
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:16px;
+    padding:28px;
+    width:100%; max-width:440px;
+    transform:scale(.96) translateY(8px);
+    transition:transform .2s;
+    max-height:90vh;
+    overflow-y:auto;
+  }
+  .overlay.open .modal { transform:scale(1) translateY(0); }
+
+  .modal-title {
+    font-family:'Syne',sans-serif;
+    font-size:18px; font-weight:800;
+    margin-bottom:4px;
+  }
+  .modal-sub { font-size:11px; color:var(--text3); margin-bottom:24px; }
+
+  .form-group { margin-bottom:16px; }
+  .form-label { font-size:10px; letter-spacing:2px; text-transform:uppercase; color:var(--text3); display:block; margin-bottom:7px; }
+
+  .form-input, .form-select {
+    width:100%;
+    background:var(--surface2);
+    border:1px solid var(--border);
+    border-radius:8px;
+    padding:10px 14px;
+    color:var(--text);
+    font-family:'JetBrains Mono',monospace;
+    font-size:13px;
+    transition:border-color .15s;
+    outline:none;
+    -webkit-appearance:none;
+  }
+  .form-input:focus, .form-select:focus { border-color:var(--accent); box-shadow:0 0 0 3px rgba(0,229,255,0.08); }
+  .form-select { cursor:pointer; }
+
+  .color-row { display:flex; gap:8px; flex-wrap:wrap; }
+  .color-opt {
+    width:28px; height:28px; border-radius:50%;
+    cursor:pointer; border:2px solid transparent;
+    transition:transform .15s, border-color .15s;
+  }
+  .color-opt:hover { transform:scale(1.1); }
+  .color-opt.selected { border-color: #fff; transform:scale(1.1); }
+
+  .form-row { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+
+  .modal-actions { display:flex; gap:8px; justify-content:flex-end; margin-top:24px; }
+
+  /* ——— TYPE COLORS ——— */
+  .type-web    { background:rgba(0,229,255,0.1); color:var(--accent); }
+  .type-server { background:rgba(124,58,237,0.15); color:#a78bfa; }
+  .type-db     { background:rgba(16,185,129,0.1); color:var(--accent3); }
+  .type-vpn    { background:rgba(245,158,11,0.1); color:var(--warn); }
+  .type-app    { background:rgba(239,68,68,0.1); color:var(--danger); }
+  .type-other  { background:rgba(255,255,255,0.05); color:var(--text2); }
+
+  .border-web    { border-left-color:var(--accent)!important; }
+  .border-server { border-left-color:#a78bfa!important; }
+  .border-db     { border-left-color:var(--accent3)!important; }
+  .border-vpn    { border-left-color:var(--warn)!important; }
+  .border-app    { border-left-color:var(--danger)!important; }
+  .border-other  { border-left-color:var(--text3)!important; }
+
+  .before-web    { background:var(--accent); }
+  .before-server { background:#a78bfa; }
+  .before-db     { background:var(--accent3); }
+  .before-vpn    { background:var(--warn); }
+  .before-app    { background:var(--danger); }
+  .before-other  { background:var(--text3); }
+
+  /* ——— LOGIN SCREEN ——— */
+  #loginScreen {
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    background: var(--bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: opacity .4s ease, transform .4s ease;
+  }
+
+  #loginScreen.hidden {
+    opacity: 0;
+    pointer-events: none;
+    transform: scale(1.04);
+  }
+
+  .login-box {
+    width: 100%;
+    max-width: 380px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 40px 36px;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 0 60px rgba(0,229,255,0.06), 0 0 120px rgba(124,58,237,0.04);
+  }
+
+  .login-box::before {
+    content: '';
+    position: absolute;
+    top: -60px; left: 50%; transform: translateX(-50%);
+    width: 200px; height: 200px;
+    background: radial-gradient(circle, rgba(0,229,255,0.08), transparent 70%);
+    pointer-events: none;
+  }
+
+  .login-logo {
+    text-align: center;
+    margin-bottom: 32px;
+  }
+
+  .login-logo-mark {
+    font-family: 'Syne', sans-serif;
+    font-size: 26px;
+    font-weight: 800;
+    color: var(--accent);
+    text-shadow: var(--glow);
+    letter-spacing: -0.5px;
+  }
+
+  .login-logo-sub {
+    font-size: 10px;
+    color: var(--text3);
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-top: 4px;
+  }
+
+  .login-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 6px;
+  }
+
+  .login-sub {
+    font-size: 11px;
+    color: var(--text3);
+    margin-bottom: 28px;
+  }
+
+  .login-error {
+    background: rgba(239,68,68,0.08);
+    border: 1px solid rgba(239,68,68,0.25);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 12px;
+    color: var(--danger);
+    margin-bottom: 16px;
+    display: none;
+  }
+
+  .login-error.show { display: block; }
+
+  .login-btn {
+    width: 100%;
+    padding: 13px;
+    background: var(--accent);
+    color: #000;
+    border: none;
+    border-radius: 9px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    letter-spacing: 0.5px;
+    margin-top: 8px;
+    transition: all .2s;
+  }
+
+  .login-btn:hover { background: #00c8e0; box-shadow: var(--glow); }
+  .login-btn:active { transform: scale(.98); }
+
+  .login-footer {
+    margin-top: 24px;
+    text-align: center;
+    font-size: 10px;
+    color: var(--text3);
+    letter-spacing: 1px;
+  }
+
+  .login-input-wrap {
+    position: relative;
+  }
+
+  .login-input-wrap .form-input {
+    padding-right: 40px;
+  }
+
+  .toggle-pass-btn {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: var(--text3);
+    cursor: pointer;
+    font-size: 14px;
+    padding: 2px;
+    transition: color .15s;
+  }
+
+  .toggle-pass-btn:hover { color: var(--accent); }
+
+  /* ——— SETTINGS NAV BUTTON ——— */
+  .sidebar-bottom {
+    margin-top: auto;
+    padding: 12px 16px 16px;
+    border-top: 1px solid var(--border);
+  }
+
+  .settings-nav-btn {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--text2);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    transition: all .15s;
+    text-align: left;
+  }
+
+  .settings-nav-btn:hover { background: var(--surface2); border-color: var(--border); color: var(--text); }
+
+  .settings-nav-btn.active {
+    background: rgba(124,58,237,0.08);
+    border-color: rgba(124,58,237,0.25);
+    color: #a78bfa;
+  }
+
+  .settings-nav-icon { font-size: 16px; flex-shrink: 0; }
+
+  /* ——— SETTINGS PAGE ——— */
+  .settings-page { animation: fadeIn .2s ease; max-width: 600px; }
+
+  .settings-section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 28px;
+    margin-bottom: 20px;
+  }
+
+  .settings-section-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .settings-section-sub {
+    font-size: 11px;
+    color: var(--text3);
+    margin-bottom: 24px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .settings-field { margin-bottom: 16px; }
+  .settings-field:last-of-type { margin-bottom: 0; }
+
+  .settings-msg {
+    padding: 11px 14px;
+    border-radius: 8px;
+    font-size: 12px;
+    margin-bottom: 16px;
+    display: none;
+  }
+
+  .settings-msg.success {
+    display: block;
+    background: rgba(16,185,129,0.08);
+    border: 1px solid rgba(16,185,129,0.25);
+    color: var(--accent3);
+  }
+
+  .settings-msg.error {
+    display: block;
+    background: rgba(239,68,68,0.08);
+    border: 1px solid rgba(239,68,68,0.25);
+    color: var(--danger);
+  }
+
+  .settings-input-wrap {
+    position: relative;
+  }
+
+  .settings-input-wrap .form-input { padding-right: 40px; }
+
+  .settings-toggle-pass {
+    position: absolute;
+    right: 12px; top: 50%;
+    transform: translateY(-50%);
+    background: none; border: none;
+    color: var(--text3); cursor: pointer;
+    font-size: 13px; padding: 2px;
+    transition: color .15s;
+  }
+
+  .settings-toggle-pass:hover { color: var(--accent); }
+
+  .settings-info-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+  }
+
+  .settings-info-row:last-child { border-bottom: none; padding-bottom: 0; }
+
+  .settings-info-label { color: var(--text3); }
+  .settings-info-value { color: var(--text); font-weight: 500; }
+
+  .logout-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 11px 18px;
+    border-radius: 8px;
+    background: rgba(239,68,68,0.06);
+    border: 1px solid rgba(239,68,68,0.2);
+    color: var(--danger);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all .2s;
+    margin-top: 8px;
+  }
+
+  .logout-btn:hover { background: rgba(239,68,68,0.12); border-color: rgba(239,68,68,0.4); }
+
+  /* ——— SELECTION MODE ——— */
+  .access-card.selectable { cursor: pointer; }
+
+  .access-card.selectable:hover { border-color: rgba(0,229,255,0.3); }
+
+  .access-card.card-selected {
+    border-color: var(--accent) !important;
+    background: rgba(0,229,255,0.04);
+    box-shadow: 0 0 0 1px rgba(0,229,255,0.2);
+  }
+
+  .card-select-check {
+    display: none;
+    position: absolute;
+    top: 10px; right: 10px;
+    width: 18px; height: 18px;
+    border-radius: 5px;
+    border: 1.5px solid var(--border);
+    background: var(--surface2);
+    align-items: center; justify-content: center;
+    font-size: 11px;
+    z-index: 2;
+    transition: all .15s;
+  }
+
+  .selection-mode .access-card .card-select-check { display: flex; }
+  .access-card.card-selected .card-select-check { background: var(--accent); border-color: var(--accent); color: #000; }
+
+  /* bulk action bar */
+  .bulk-bar {
+    position: fixed;
+    bottom: 28px; left: 50%; transform: translateX(-50%) translateY(16px);
+    z-index: 500;
+    display: flex; align-items: center; gap: 8px;
+    background: var(--surface3);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 10px 16px;
+    box-shadow: 0 8px 40px rgba(0,0,0,.6);
+    transition: opacity .25s ease, transform .25s cubic-bezier(.34,1.56,.64,1);
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .bulk-bar.visible {
+    opacity: 1;
+    pointer-events: all;
+    transform: translateX(-50%) translateY(0);
+  }
+
+  .bulk-bar-group { bottom: 90px; }
+
+  /* ——— READONLY MODE ——— */
+  .readonly-banner {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 9000;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 10px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    letter-spacing: 0.3px;
+    box-shadow: 0 2px 20px rgba(0,0,0,.4);
+  }
+
+  .readonly-banner.mode-view   { background: linear-gradient(90deg, rgba(124,58,237,0.95), rgba(0,229,255,0.85)); color: #000; }
+  .readonly-banner.mode-editor { background: linear-gradient(90deg, rgba(16,185,129,0.95), rgba(0,229,255,0.80)); color: #000; }
+
+  .readonly-banner-icon { font-size: 15px; }
+
+  body.readonly-mode .app    { margin-top: 40px; }
+  body.editor-mode   .app    { margin-top: 40px; }
+
+  body.readonly-mode .add-user-btn,
+  body.readonly-mode .btn-primary,
+  body.readonly-mode .btn-danger,
+  body.readonly-mode .select-mode-btn,
+  body.readonly-mode .bulk-bar,
+  body.readonly-mode .access-footer-actions,
+  body.readonly-mode .member-remove-btn,
+  body.readonly-mode .sidebar-bottom,
+  body.readonly-mode .sidebar-label-add,
+  body.readonly-mode #loginScreen { display: none !important; }
+
+  body.readonly-mode .access-card { cursor: default; }
+
+  /* editor mode hides only login */
+  body.editor-mode #loginScreen { display: none !important; }
+  body.editor-mode .share-project-btn { display: none !important; }
+
+  /* ——— EDITOR PASSWORD SCREEN ——— */
+  #editorAuthScreen {
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    background: var(--bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: opacity .4s ease, transform .4s ease;
+  }
+
+  #editorAuthScreen.hidden {
+    opacity: 0;
+    pointer-events: none;
+    transform: scale(1.04);
+  }
+
+  .editor-auth-box {
+    width: 100%;
+    max-width: 380px;
+    background: var(--surface);
+    border: 1px solid rgba(16,185,129,0.3);
+    border-radius: 20px;
+    padding: 40px 36px;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 0 60px rgba(16,185,129,0.08), 0 0 120px rgba(0,229,255,0.04);
+  }
+
+  .editor-auth-box::before {
+    content: '';
+    position: absolute;
+    top: -60px; left: 50%; transform: translateX(-50%);
+    width: 200px; height: 200px;
+    background: radial-gradient(circle, rgba(16,185,129,0.1), transparent 70%);
+    pointer-events: none;
+  }
+
+  .editor-auth-logo { text-align: center; margin-bottom: 28px; }
+  .editor-auth-icon { font-size: 36px; margin-bottom: 8px; }
+  .editor-auth-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 18px; font-weight: 700;
+    color: var(--text); margin-bottom: 4px;
+  }
+  .editor-auth-sub { font-size: 11px; color: var(--text3); margin-bottom: 24px; }
+
+  .editor-auth-error {
+    background: rgba(239,68,68,0.08);
+    border: 1px solid rgba(239,68,68,0.25);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 12px;
+    color: var(--danger);
+    margin-bottom: 16px;
+    display: none;
+  }
+  .editor-auth-error.show { display: block; }
+
+  .editor-auth-btn {
+    width: 100%;
+    padding: 13px;
+    background: var(--accent3);
+    color: #000;
+    border: none;
+    border-radius: 9px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    margin-top: 8px;
+    transition: all .2s;
+  }
+  .editor-auth-btn:hover { filter: brightness(1.1); box-shadow: 0 0 20px rgba(16,185,129,0.3); }
+  .editor-auth-btn:active { transform: scale(.98); }
+
+  /* ——— EDITOR EXPORT BUTTON (fixed) ——— */
+  .editor-export-btn {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    z-index: 400;
+    display: none;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 20px;
+    background: var(--accent3);
+    color: #000;
+    border: none;
+    border-radius: 12px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 4px 24px rgba(16,185,129,0.35);
+    transition: all .2s;
+  }
+
+  body.editor-mode .editor-export-btn { display: flex; }
+  .editor-export-btn:hover { filter: brightness(1.1); transform: translateY(-1px); box-shadow: 0 6px 32px rgba(16,185,129,0.45); }
+  .editor-export-btn:active { transform: translateY(0); }
+
+  /* ——— SYNC CODE BOX ——— */
+  .sync-code-area {
+    width: 100%;
+    min-height: 100px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    resize: vertical;
+    outline: none;
+    transition: border-color .15s;
+    line-height: 1.5;
+  }
+  .sync-code-area:focus { border-color: var(--accent3); }
+  .sync-code-area::placeholder { color: var(--text3); }
+
+  .sync-preview {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px;
+    margin-top: 12px;
+    display: none;
+  }
+  .sync-preview.show { display: block; }
+
+  .sync-preview-title {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text2);
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .sync-stat {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 500;
+    margin: 3px 4px 3px 0;
+  }
+  .sync-stat-new    { background: rgba(16,185,129,0.1);  color: var(--accent3); border: 1px solid rgba(16,185,129,0.25); }
+  .sync-stat-update { background: rgba(0,229,255,0.08);  color: var(--accent);  border: 1px solid rgba(0,229,255,0.2);  }
+  .sync-stat-same   { background: var(--surface3);       color: var(--text3);   border: 1px solid var(--border);          }
+
+  /* ——— SHARE PROJECT MODAL TABS ——— */
+  .spm-tabs {
+    display: flex;
+    gap: 4px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 4px;
+    margin-bottom: 20px;
+  }
+
+  .spm-tab {
+    flex: 1;
+    padding: 9px 14px;
+    border-radius: 7px;
+    border: none;
+    background: transparent;
+    color: var(--text3);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all .15s;
+    text-align: center;
+  }
+
+  .spm-tab:hover { color: var(--text); }
+
+  .spm-tab.active {
+    background: var(--surface3);
+    color: var(--text);
+    box-shadow: 0 1px 4px rgba(0,0,0,.3);
+  }
+
+  .spm-tab.active.tab-view   { color: #a78bfa; }
+  .spm-tab.active.tab-editor { color: var(--accent3); }
+
+  .spm-panel { display: none; }
+  .spm-panel.active { display: block; }
+
+  .share-link-warning-editor {
+    background: rgba(16,185,129,0.08);
+    border: 1px solid rgba(16,185,129,0.2);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 11px;
+    color: var(--accent3);
+    line-height: 1.6;
+    margin-bottom: 16px;
+  }
+
+  /* share button in sidebar */
+  .share-project-btn {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--text2);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    transition: all .15s;
+    text-align: left;
+    margin-top: 6px;
+  }
+  .share-project-btn:hover { background: rgba(0,229,255,0.06); border-color: rgba(0,229,255,0.2); color: var(--accent); }
+
+  /* share link modal */
+  .share-link-box {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--text2);
+    word-break: break-all;
+    line-height: 1.6;
+    max-height: 120px;
+    overflow-y: auto;
+    user-select: all;
+    margin-bottom: 12px;
+  }
+
+  .share-link-warning {
+    background: rgba(245,158,11,0.08);
+    border: 1px solid rgba(245,158,11,0.25);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 11px;
+    color: #fbbf24;
+    line-height: 1.6;
+    margin-bottom: 16px;
+  }
+
+  .bulk-count {
+    font-size: 12px;
+    color: var(--accent);
+    font-weight: 600;
+    min-width: 80px;
+  }
+
+  .bulk-divider {
+    width: 1px; height: 20px;
+    background: var(--border);
+    margin: 0 4px;
+  }
+
+  .bulk-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 7px 13px;
+    border-radius: 7px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: all .15s;
+  }
+
+  .bulk-btn-share { background: rgba(124,58,237,0.15); color: #a78bfa; border-color: rgba(124,58,237,0.3); }
+  .bulk-btn-share:hover { background: rgba(124,58,237,0.25); }
+
+  .bulk-btn-delete { background: rgba(239,68,68,0.1); color: var(--danger); border-color: rgba(239,68,68,0.25); }
+  .bulk-btn-delete:hover { background: rgba(239,68,68,0.2); }
+
+  .bulk-btn-cancel { background: var(--surface2); color: var(--text2); border-color: var(--border); }
+  .bulk-btn-cancel:hover { color: var(--text); border-color: var(--text3); }
+
+  .select-mode-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 7px 13px;
+    border-radius: 7px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    cursor: pointer;
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text3);
+    transition: all .15s;
+  }
+  .select-mode-btn:hover { color: var(--text); border-color: var(--text3); }
+  .select-mode-btn.active { color: var(--accent); border-color: rgba(0,229,255,0.4); background: rgba(0,229,255,0.06); }
+
+  /* ——— SHARE STEP 2: unified user+group list ——— */
+  .share-dest-section-label {
+    font-size: 9px;
+    letter-spacing: 2.5px;
+    text-transform: uppercase;
+    color: var(--text3);
+    padding: 10px 14px 6px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .share-group-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    cursor: pointer;
+    transition: background .1s;
+    border-bottom: 1px solid var(--border);
+  }
+  .share-group-item:last-child { border-bottom: none; }
+  .share-group-item:hover { background: var(--surface3); }
+  .share-group-item.selected { background: rgba(124,58,237,0.08); }
+
+  .share-group-icon {
+    width: 30px; height: 30px;
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px;
+    background: rgba(124,58,237,0.12);
+    flex-shrink: 0;
+  }
+
+  .share-group-name { font-size: 13px; color: var(--text); font-weight: 500; }
+  .share-group-meta { font-size: 10px; color: var(--text3); margin-top: 1px; }
+
+  /* ——— GROUPS SIDEBAR ——— */
+  .sidebar-label-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 8px;
+    margin-bottom: 8px;
+  }
+
+  .sidebar-label-add {
+    background: none;
+    border: none;
+    color: var(--text3);
+    font-size: 16px;
+    cursor: pointer;
+    line-height: 1;
+    padding: 0 2px;
+    transition: color .15s;
+    font-family: inherit;
+  }
+  .sidebar-label-add:hover { color: var(--accent); }
+
+  .group-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all .15s;
+    border: 1px solid transparent;
+    margin-bottom: 2px;
+  }
+  .group-item:hover { background: var(--surface2); border-color: var(--border); }
+  .group-item.active {
+    background: rgba(124,58,237,0.07);
+    border-color: rgba(124,58,237,0.25);
+  }
+
+  .group-icon {
+    width: 30px; height: 30px;
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px;
+    flex-shrink: 0;
+  }
+
+  .group-item-info { flex: 1; min-width: 0; }
+  .group-item-name { font-size: 12px; font-weight: 500; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .group-item-meta { font-size: 10px; color: var(--text3); margin-top: 1px; }
+
+  .group-badge {
+    font-size: 10px;
+    background: var(--surface3);
+    color: var(--text2);
+    padding: 2px 7px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .group-item.active .group-badge { background: rgba(124,58,237,0.12); color: #a78bfa; border-color: rgba(124,58,237,0.3); }
+
+  /* ——— GROUP DETAIL ——— */
+  .group-detail { animation: fadeIn .2s ease; }
+
+  .group-header-card {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    padding: 24px 28px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    margin-bottom: 24px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .group-header-card::before {
+    content: '';
+    position: absolute;
+    top: -30px; right: -30px;
+    width: 150px; height: 150px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(124,58,237,0.15), transparent 70%);
+    pointer-events: none;
+  }
+
+  .group-big-icon {
+    width: 60px; height: 60px;
+    border-radius: 14px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 26px;
+    flex-shrink: 0;
+  }
+
+  .group-header-info { flex: 1; }
+  .group-header-name { font-family: 'Syne', sans-serif; font-size: 24px; font-weight: 800; letter-spacing: -0.5px; }
+  .group-header-desc { font-size: 12px; color: var(--text3); margin-top: 5px; max-width: 500px; line-height: 1.5; }
+
+  /* members list inside group detail */
+  .members-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+
+  .member-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    transition: all .15s;
+    cursor: pointer;
+  }
+  .member-card:hover { border-color: var(--text3); background: var(--surface3); }
+
+  .member-avatar {
+    width: 34px; height: 34px;
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Syne', sans-serif;
+    font-weight: 700; font-size: 12px;
+    flex-shrink: 0;
+  }
+
+  .member-info { flex: 1; min-width: 0; }
+  .member-name { font-size: 12px; font-weight: 500; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .member-role { font-size: 10px; color: var(--text3); margin-top: 1px; }
+
+  .member-remove-btn {
+    background: none; border: none;
+    color: var(--text3); cursor: pointer;
+    font-size: 13px; padding: 2px 4px;
+    border-radius: 4px;
+    transition: color .15s;
+    flex-shrink: 0;
+  }
+  .member-remove-btn:hover { color: var(--danger); }
+
+  .no-members {
+    padding: 28px;
+    text-align: center;
+    color: var(--text3);
+    font-size: 12px;
+    border: 1px dashed var(--border);
+    border-radius: 10px;
+    line-height: 1.7;
+  }
+
+  /* member picker inside modal */
+  .member-picker-list {
+    max-height: 220px;
+    overflow-y: auto;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface2);
+  }
+
+  .member-picker-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    cursor: pointer;
+    transition: background .1s;
+    border-bottom: 1px solid var(--border);
+  }
+  .member-picker-item:last-child { border-bottom: none; }
+  .member-picker-item:hover { background: var(--surface3); }
+  .member-picker-item.selected { background: rgba(124,58,237,0.08); }
+
+  .member-picker-check {
+    width: 16px; height: 16px;
+    border-radius: 4px;
+    border: 1.5px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px;
+    transition: all .15s;
+    flex-shrink: 0;
+  }
+  .member-picker-item.selected .member-picker-check {
+    background: #7c3aed;
+    border-color: #7c3aed;
+    color: #fff;
+  }
+
+  .group-icon-picker {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 4px;
+  }
+
+  .icon-opt {
+    width: 36px; height: 36px;
+    border-radius: 8px;
+    border: 1.5px solid var(--border);
+    background: var(--surface2);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+    cursor: pointer;
+    transition: all .15s;
+  }
+  .icon-opt:hover { border-color: var(--text3); background: var(--surface3); }
+  .icon-opt.selected { border-color: #7c3aed; background: rgba(124,58,237,0.12); }
+
+  /* search */
+  .search-bar {
+    padding:12px 16px;
+    border-bottom:1px solid var(--border);
+    position:relative;
+  }
+  .search-bar input {
+    width:100%; background:var(--surface2); border:1px solid var(--border);
+    border-radius:7px; padding:8px 12px 8px 32px;
+    color:var(--text); font-family:'JetBrains Mono',monospace; font-size:12px;
+    outline:none;
+  }
+  .search-bar input:focus { border-color:var(--accent); }
+  .search-bar::before {
+    content:'⌕'; position:absolute; left:24px; top:50%; transform:translateY(-50%);
+    color:var(--text3); font-size:16px; pointer-events:none; z-index:1;
+  }
+
+  /* toast */
+  .toast {
+    position:fixed; bottom:24px; right:24px; z-index:200;
+    background:var(--surface3);
+    border:1px solid var(--border);
+    border-radius:8px;
+    padding:12px 18px;
+    font-size:12px;
+    color:var(--text);
+    transform:translateY(80px);
+    transition:transform .3s cubic-bezier(.34,1.56,.64,1);
+    display:flex; align-items:center; gap:8px;
+    box-shadow:0 8px 32px rgba(0,0,0,.4);
+  }
+  .toast.show { transform:translateY(0); }
+  .toast-icon { font-size:14px; }
+
+  /* scrollbar */
+  ::-webkit-scrollbar { width:4px; }
+  ::-webkit-scrollbar-track { background:transparent; }
+  ::-webkit-scrollbar-thumb { background:var(--border); border-radius:4px; }
+  ::-webkit-scrollbar-thumb:hover { background:var(--text3); }
+
+  .no-access {
+    grid-column:1/-1;
+    padding:40px;
+    text-align:center;
+    color:var(--text3);
+    font-size:12px;
+    border:1px dashed var(--border);
+    border-radius:10px;
+  }
+
+  /* ——— ACCESS SEARCH BAR ——— */
+  .access-search-wrap {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+  }
+
+  .access-search-box {
+    position: relative;
+    flex: 1;
+    min-width: 200px;
+  }
+
+  .access-search-box input {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 9px 14px 9px 36px;
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    outline: none;
+    transition: border-color .15s, box-shadow .15s;
+  }
+
+  .access-search-box input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(0,229,255,0.08);
+  }
+
+  .access-search-box input::placeholder { color: var(--text3); }
+
+  .access-search-icon {
+    position: absolute;
+    left: 12px; top: 50%;
+    transform: translateY(-50%);
+    color: var(--text3);
+    font-size: 15px;
+    pointer-events: none;
+    line-height: 1;
+  }
+
+  .access-search-box input:focus ~ .access-search-icon { color: var(--accent); }
+
+  .clear-search-btn {
+    position: absolute;
+    right: 10px; top: 50%;
+    transform: translateY(-50%);
+    background: none; border: none;
+    color: var(--text3); cursor: pointer;
+    font-size: 14px; line-height: 1;
+    display: none;
+    transition: color .15s;
+  }
+  .clear-search-btn:hover { color: var(--text); }
+  .clear-search-btn.visible { display: block; }
+
+  /* filter chips */
+  .filter-chips {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .chip {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 5px 11px;
+    border-radius: 20px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: .5px;
+    cursor: pointer;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    color: var(--text3);
+    transition: all .15s;
+    white-space: nowrap;
+  }
+
+  .chip:hover { color: var(--text); border-color: var(--text3); }
+
+  .chip.active-chip {
+    background: rgba(0,229,255,0.1);
+    border-color: rgba(0,229,255,0.35);
+    color: var(--accent);
+  }
+
+  .chip-web.active-chip    { background:rgba(0,229,255,0.1);  border-color:rgba(0,229,255,0.35);  color:var(--accent);  }
+  .chip-server.active-chip { background:rgba(124,58,237,0.12);border-color:rgba(167,139,250,0.4); color:#a78bfa; }
+  .chip-db.active-chip     { background:rgba(16,185,129,0.1); border-color:rgba(16,185,129,0.35); color:var(--accent3);}
+  .chip-vpn.active-chip    { background:rgba(245,158,11,0.1); border-color:rgba(245,158,11,0.35); color:var(--warn);   }
+  .chip-app.active-chip    { background:rgba(239,68,68,0.1);  border-color:rgba(239,68,68,0.35);  color:var(--danger); }
+  .chip-other.active-chip  { background:rgba(255,255,255,0.05);border-color:var(--text3);         color:var(--text2);  }
+
+  .search-result-info {
+    font-size: 11px;
+    color: var(--text3);
+    margin-bottom: 14px;
+    display: flex; align-items: center; gap: 8px;
+  }
+
+  .search-result-info span { color: var(--accent); font-weight: 600; }
+
+  /* highlight match */
+  .hl { background: rgba(0,229,255,0.2); color: var(--accent); border-radius: 2px; padding: 0 1px; }
+  .edit-access-btn {
+    background:none; border:none; color:var(--text3); cursor:pointer;
+    font-size:12px; padding:1px 4px; border-radius:3px;
+    transition:color .15s;
+  }
+  .edit-access-btn:hover { color:var(--accent); }
+
+  .access-footer-actions { display:flex; gap:6px; align-items:center; }
+
+  /* ——— TABS ——— */
+  .tabs-bar {
+    display:flex; gap:0;
+    border-bottom:1px solid var(--border);
+    margin-bottom:20px;
+  }
+
+  .tab-btn {
+    padding:10px 20px;
+    font-family:'JetBrains Mono',monospace;
+    font-size:11px;
+    letter-spacing:1px;
+    text-transform:uppercase;
+    background:none;
+    border:none;
+    border-bottom:2px solid transparent;
+    color:var(--text3);
+    cursor:pointer;
+    transition:all .15s;
+    margin-bottom:-1px;
+  }
+
+  .tab-btn:hover { color:var(--text2); }
+  .tab-btn.active { color:var(--accent); border-bottom-color:var(--accent); }
+
+  .tab-panel { display:none; animation:fadeIn .15s ease; }
+  .tab-panel.active { display:block; }
+
+  /* ——— OBSERVATIONS ——— */
+  .obs-area {
+    width:100%;
+    min-height:200px;
+    background:var(--surface2);
+    border:1px solid var(--border);
+    border-radius:10px;
+    padding:16px;
+    color:var(--text);
+    font-family:'JetBrains Mono',monospace;
+    font-size:13px;
+    line-height:1.7;
+    resize:vertical;
+    outline:none;
+    transition:border-color .15s;
+  }
+  .obs-area:focus { border-color:var(--accent); box-shadow:0 0 0 3px rgba(0,229,255,0.07); }
+  .obs-area::placeholder { color:var(--text3); }
+
+  .obs-save-row {
+    display:flex; justify-content:space-between; align-items:center;
+    margin-top:12px;
+  }
+  .obs-hint { font-size:10px; color:var(--text3); }
+
+  /* ——— FORM TEXTAREA ——— */
+  .form-textarea {
+    width:100%;
+    background:var(--surface2);
+    border:1px solid var(--border);
+    border-radius:8px;
+    padding:10px 14px;
+    color:var(--text);
+    font-family:'JetBrains Mono',monospace;
+    font-size:13px;
+    transition:border-color .15s;
+    outline:none;
+    resize:vertical;
+    min-height:80px;
+    line-height:1.6;
+  }
+  .form-textarea:focus { border-color:var(--accent); box-shadow:0 0 0 3px rgba(0,229,255,0.08); }
+
+  /* ——— SHARE BUTTON ——— */
+  .btn-share {
+    background: transparent;
+    color: #a78bfa;
+    border-color: rgba(124,58,237,0.35);
+  }
+  .btn-share:hover { background: rgba(124,58,237,0.1); box-shadow: 0 0 20px rgba(124,58,237,0.15); }
+
+  /* ——— SHARE MODAL ——— */
+  .modal-lg { max-width: 560px; }
+
+  .share-user-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 200px;
+    overflow-y: auto;
+    margin-bottom: 4px;
+  }
+
+  .share-user-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    cursor: pointer;
+    transition: all .15s;
+    user-select: none;
+  }
+
+  .share-user-item:hover { border-color: var(--text3); }
+
+  .share-user-item.selected {
+    border-color: rgba(124,58,237,0.5);
+    background: rgba(124,58,237,0.08);
+  }
+
+  .share-check {
+    width: 18px; height: 18px;
+    border-radius: 5px;
+    border: 1.5px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px;
+    flex-shrink: 0;
+    transition: all .15s;
+    color: transparent;
+    background: var(--surface3);
+  }
+
+  .share-user-item.selected .share-check {
+    background: #7c3aed;
+    border-color: #7c3aed;
+    color: #fff;
+  }
+
+  .share-user-name { font-size: 13px; font-weight: 500; flex: 1; }
+  .share-user-role { font-size: 10px; color: var(--text3); }
+
+  /* access selection list */
+  .share-access-list {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    max-height: 220px;
+    overflow-y: auto;
+  }
+
+  .share-access-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 12px;
+    border-radius: 7px;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    cursor: pointer;
+    transition: all .15s;
+    user-select: none;
+  }
+
+  .share-access-item:hover { border-color: var(--text3); }
+
+  .share-access-item.selected {
+    border-color: rgba(0,229,255,0.35);
+    background: rgba(0,229,255,0.05);
+  }
+
+  .share-access-item.selected .share-check {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #000;
+  }
+
+  .share-access-icon { font-size: 16px; flex-shrink: 0; }
+  .share-access-info { flex: 1; min-width: 0; }
+  .share-access-name { font-size: 12px; font-weight: 500; }
+  .share-access-meta { font-size: 10px; color: var(--text3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  .share-select-all {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 8px;
+  }
+
+  .share-select-all-btn {
+    background: none; border: none;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; color: var(--accent);
+    cursor: pointer; padding: 0;
+    letter-spacing: .5px;
+  }
+  .share-select-all-btn:hover { text-decoration: underline; }
+
+  .share-step {
+    display: none;
+  }
+  .share-step.active { display: block; animation: fadeIn .15s ease; }
+
+  .share-steps-indicator {
+    display: flex; gap: 6px; align-items: center;
+    margin-bottom: 20px;
+  }
+
+  .step-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--border);
+    transition: all .2s;
+  }
+  .step-dot.active { background: #7c3aed; width: 20px; border-radius: 3px; }
+  .step-dot.done   { background: var(--accent3); }
+
+  .step-label {
+    font-size: 10px; color: var(--text3);
+    letter-spacing: 1px; text-transform: uppercase;
+    margin-left: 4px;
+  }
+
+  /* import banner */
+  .import-zone {
+    border: 1.5px dashed var(--border);
+    border-radius: 10px;
+    padding: 20px;
+    text-align: center;
+    transition: border-color .2s;
+    cursor: pointer;
+    margin-bottom: 12px;
+  }
+  .import-zone:hover { border-color: var(--accent); background: rgba(0,229,255,0.03); }
+  .import-zone p { font-size: 12px; color: var(--text3); margin-top: 6px; }
+
+  .import-code-area {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    outline: none;
+    resize: vertical;
+    min-height: 100px;
+    line-height: 1.6;
+    transition: border-color .15s;
+  }
+  .import-code-area:focus { border-color: var(--accent); }
+
+  .export-code-box {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--text2);
+    word-break: break-all;
+    line-height: 1.6;
+    max-height: 100px;
+    overflow-y: auto;
+    margin: 12px 0;
+    position: relative;
+  }
+
+  .share-success {
+    text-align: center;
+    padding: 20px 0 8px;
+  }
+  .share-success-icon { font-size: 44px; margin-bottom: 12px; }
+  .share-success h3 { font-family: 'Syne', sans-serif; font-size: 18px; font-weight: 800; margin-bottom: 6px; }
+  .share-success p { font-size: 11px; color: var(--text3); line-height: 1.6; }
+
+  .share-access-badge {
+    font-size: 9px; padding: 2px 6px; border-radius: 10px;
+    font-weight: 600; flex-shrink: 0;
+  }
+
+  .divider {
+    border: none; border-top: 1px solid var(--border);
+    margin: 16px 0;
+  }
+</style>
+</head>
+<body>
+
+<!-- ——— LOGIN SCREEN ——— -->
+<div id="loginScreen">
+  <div class="login-box">
+    <div class="login-logo">
+      <div class="login-logo-mark">AccessVault</div>
+      <div class="login-logo-sub">Gerenciador de Acessos</div>
+    </div>
+    <div class="login-title">Acesso restrito</div>
+    <div class="login-sub">Insira suas credenciais para continuar.</div>
+    <div class="login-error" id="loginError">Usuário ou senha incorretos.</div>
+    <div class="form-group">
+      <label class="form-label">Usuário</label>
+      <input class="form-input" type="text" id="loginUser" placeholder="Digite seu usuário" autocomplete="username" onkeydown="if(event.key==='Enter')doLogin()">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Senha</label>
+      <div class="login-input-wrap">
+        <input class="form-input" type="password" id="loginPass" placeholder="Digite sua senha" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
+        <button class="toggle-pass-btn" onclick="toggleLoginPass()" title="Mostrar/ocultar senha">👁</button>
+      </div>
+    </div>
+    <button class="login-btn" onclick="doLogin()">Entrar →</button>
+    <div class="login-footer">🔒 Sessão criptografada</div>
+  </div>
+</div>
+
+<div class="app">
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="logo">
+      <div class="logo-mark">AccessVault</div>
+      <div class="logo-sub">Gerenciador de Acessos</div>
+    </div>
+    <div class="search-bar">
+      <input type="text" id="userSearch" placeholder="Buscar usuário..." oninput="filterUsers()">
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Usuários</div>
+      <div id="userList"></div>
+      <button class="add-user-btn" onclick="openModal('userModal')">
+        <span>+</span> Novo Usuário
+      </button>
+      <button class="add-user-btn" style="margin-top:0;border-style:dashed;color:var(--text3)" onclick="openImportModal()">
+        <span>📥</span> Importar Acessos
+      </button>
+    </div>
+
+    <div class="sidebar-section" style="padding-top:8px">
+      <div class="sidebar-label-row">
+        <span class="sidebar-label" style="padding:0;margin:0">Grupos</span>
+        <button class="sidebar-label-add" onclick="openModal('groupModal')" title="Novo Grupo">+</button>
+      </div>
+      <div id="groupList"></div>
+    </div>
+
+    <div class="sidebar-bottom">
+      <button class="share-project-btn" onclick="openShareProjectModal()">
+        <span class="settings-nav-icon">↗</span>
+        <span>Compartilhar projeto</span>
+      </button>
+      <button class="settings-nav-btn" id="settingsNavBtn" onclick="openSettings()">
+        <span class="settings-nav-icon">⚙️</span>
+        <span>Configurações</span>
+      </button>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main">
+    <header class="header">
+      <div class="header-left">
+        <h1 id="headerTitle">Selecione um usuário</h1>
+        <p id="headerSub">Gerencie credenciais e acessos</p>
+      </div>
+      <div class="header-actions" id="headerActions"></div>
+    </header>
+
+    <div class="content">
+      <div id="mainContent">
+        <div class="empty-state">
+          <div class="empty-icon">🔐</div>
+          <h2>Nenhum usuário selecionado</h2>
+          <p>Selecione um usuário na barra lateral ou crie um novo para começar a gerenciar acessos.</p>
+          <button class="btn btn-primary" onclick="openModal('userModal')">+ Criar usuário</button>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- MODAL: Novo Usuário -->
+<div class="overlay" id="userModal">
+  <div class="modal">
+    <div class="modal-title">Novo Usuário</div>
+    <div class="modal-sub">Preencha os dados do usuário</div>
+
+    <div class="form-group">
+      <label class="form-label">Nome Completo</label>
+      <input class="form-input" id="uName" placeholder="Ex: João Silva">
+    </div>
+    <div class="form-group">
+      <label class="form-label">E-mail</label>
+      <input class="form-input" id="uEmail" type="email" placeholder="joao@empresa.com">
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Cargo / Função</label>
+        <input class="form-input" id="uRole" placeholder="Ex: DevOps">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Departamento</label>
+        <input class="form-input" id="uDept" placeholder="Ex: TI">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Cor do Avatar</label>
+      <div class="color-row" id="colorPicker">
+        <div class="color-opt selected" style="background:#00e5ff" data-color="#00e5ff" onclick="selectColor(this)"></div>
+        <div class="color-opt" style="background:#7c3aed" data-color="#7c3aed" onclick="selectColor(this)"></div>
+        <div class="color-opt" style="background:#10b981" data-color="#10b981" onclick="selectColor(this)"></div>
+        <div class="color-opt" style="background:#f59e0b" data-color="#f59e0b" onclick="selectColor(this)"></div>
+        <div class="color-opt" style="background:#ef4444" data-color="#ef4444" onclick="selectColor(this)"></div>
+        <div class="color-opt" style="background:#ec4899" data-color="#ec4899" onclick="selectColor(this)"></div>
+        <div class="color-opt" style="background:#f97316" data-color="#f97316" onclick="selectColor(this)"></div>
+      </div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('userModal')">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveUser()">Criar Usuário</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Editar Usuário -->
+<div class="overlay" id="editUserModal">
+  <div class="modal">
+    <div class="modal-title">✏️ Editar Usuário</div>
+    <div class="modal-sub" id="editUserModalSub">Atualize os dados do usuário</div>
+
+    <input type="hidden" id="euId">
+
+    <div class="form-group">
+      <label class="form-label">Nome Completo</label>
+      <input class="form-input" id="euName" placeholder="Ex: João Silva">
+    </div>
+    <div class="form-group">
+      <label class="form-label">E-mail</label>
+      <input class="form-input" id="euEmail" type="email" placeholder="joao@empresa.com">
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Cargo / Função</label>
+        <input class="form-input" id="euRole" placeholder="Ex: DevOps">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Departamento</label>
+        <input class="form-input" id="euDept" placeholder="Ex: TI">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Cor do Avatar</label>
+      <div class="color-row" id="editColorPicker">
+        <div class="color-opt" style="background:#00e5ff" data-color="#00e5ff" onclick="selectEditColor(this)"></div>
+        <div class="color-opt" style="background:#7c3aed" data-color="#7c3aed" onclick="selectEditColor(this)"></div>
+        <div class="color-opt" style="background:#10b981" data-color="#10b981" onclick="selectEditColor(this)"></div>
+        <div class="color-opt" style="background:#f59e0b" data-color="#f59e0b" onclick="selectEditColor(this)"></div>
+        <div class="color-opt" style="background:#ef4444" data-color="#ef4444" onclick="selectEditColor(this)"></div>
+        <div class="color-opt" style="background:#ec4899" data-color="#ec4899" onclick="selectEditColor(this)"></div>
+        <div class="color-opt" style="background:#f97316" data-color="#f97316" onclick="selectEditColor(this)"></div>
+      </div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('editUserModal')">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveEditUser()">Salvar Alterações</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Novo Acesso -->
+<div class="overlay" id="accessModal">
+  <div class="modal">
+    <div class="modal-title">Adicionar Acesso</div>
+    <div class="modal-sub" id="accessModalSub">Credenciais para o usuário</div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Tipo de Acesso</label>
+        <select class="form-select" id="aType" onchange="updateAccessIcon()">
+          <option value="web">🌐 Site / Web</option>
+          <option value="server">🖥️ Servidor / SSH</option>
+          <option value="db">🗄️ Banco de Dados</option>
+          <option value="vpn">🔒 VPN</option>
+          <option value="app">📱 Aplicativo</option>
+          <option value="other">📦 Outro</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Nome / Sistema</label>
+        <input class="form-input" id="aName" placeholder="Ex: GitHub">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">URL / Endereço</label>
+      <input class="form-input" id="aUrl" placeholder="https://...">
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Usuário / Login</label>
+        <input class="form-input" id="aUser" placeholder="usuario@email.com">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Senha</label>
+        <input class="form-input" id="aPass" type="password" placeholder="••••••••">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Notas (opcional)</label>
+      <input class="form-input" id="aNotes" placeholder="Informações adicionais...">
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('accessModal')">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveAccess()">Adicionar Acesso</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Editar Acesso -->
+<div class="overlay" id="editAccessModal">
+  <div class="modal">
+    <div class="modal-title">Editar Acesso</div>
+    <div class="modal-sub" id="editAccessModalSub">Atualize as informações do acesso</div>
+
+    <input type="hidden" id="eAccessId">
+
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Tipo de Acesso</label>
+        <select class="form-select" id="eType">
+          <option value="web">🌐 Site / Web</option>
+          <option value="server">🖥️ Servidor / SSH</option>
+          <option value="db">🗄️ Banco de Dados</option>
+          <option value="vpn">🔒 VPN</option>
+          <option value="app">📱 Aplicativo</option>
+          <option value="other">📦 Outro</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Nome / Sistema</label>
+        <input class="form-input" id="eName" placeholder="Ex: GitHub">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">URL / Endereço</label>
+      <input class="form-input" id="eUrl" placeholder="https://...">
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Usuário / Login</label>
+        <input class="form-input" id="eUser" placeholder="usuario@email.com">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Senha</label>
+        <input class="form-input" id="ePass" type="password" placeholder="••••••••">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Notas Rápidas</label>
+      <input class="form-input" id="eNotes" placeholder="Informações adicionais...">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Observações Detalhadas</label>
+      <textarea class="form-textarea" id="eObservations" placeholder="Registre aqui procedimentos, histórico de alterações, detalhes técnicos, datas de vencimento..."></textarea>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('editAccessModal')">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveEditAccess()">Salvar Alterações</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Compartilhar Acessos -->
+<div class="overlay" id="shareModal">
+  <div class="modal modal-lg">
+    <div class="modal-title">↗ Compartilhar Acessos</div>
+    <div class="modal-sub" id="shareModalSub">Envie acessos para outro usuário</div>
+
+    <!-- steps indicator -->
+    <div class="share-steps-indicator">
+      <div class="step-dot active" id="sdot1"></div>
+      <div class="step-dot" id="sdot2"></div>
+      <div class="step-dot" id="sdot3"></div>
+      <span class="step-label" id="stepLabel">Selecionar acessos</span>
+    </div>
+
+    <!-- STEP 1: choose accesses -->
+    <div class="share-step active" id="shareStep1">
+      <div class="share-select-all">
+        <label class="form-label" style="margin:0">Acessos para compartilhar</label>
+        <button class="share-select-all-btn" onclick="shareSelectAll()">Selecionar todos</button>
+      </div>
+      <div class="share-access-list" id="shareAccessList"></div>
+      <div style="margin-top:10px;font-size:10px;color:var(--text3)" id="shareSelectedCount">0 selecionado(s)</div>
+    </div>
+
+    <!-- STEP 2: choose destination (user OR group) -->
+    <div class="share-step" id="shareStep2">
+      <label class="form-label">Enviar para qual usuário ou grupo?</label>
+      <div class="share-user-list" id="shareUserList"></div>
+    </div>
+
+    <!-- STEP 3: success + code -->
+    <div class="share-step" id="shareStep3">
+      <div class="share-success">
+        <div class="share-success-icon">✅</div>
+        <h3>Acessos compartilhados!</h3>
+        <p id="shareSuccessMsg">Os acessos foram copiados com sucesso.</p>
+      </div>
+      <hr class="divider">
+      <label class="form-label">Código de exportação (backup / envio manual)</label>
+      <div class="export-code-box" id="exportCodeBox"></div>
+      <button class="btn btn-ghost" style="width:100%;justify-content:center" onclick="copyExportCode()">⎘ Copiar código</button>
+    </div>
+
+    <div class="modal-actions" id="shareModalActions">
+      <button class="btn btn-ghost" onclick="closeModal('shareModal')">Cancelar</button>
+      <button class="btn btn-primary" id="shareNextBtn" onclick="shareNext()">Próximo →</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Importar Acessos -->
+<div class="overlay" id="importModal">
+  <div class="modal">
+    <div class="modal-title">📥 Importar Acessos</div>
+    <div class="modal-sub">Cole o código de exportação abaixo</div>
+
+    <div class="form-group">
+      <label class="form-label">Código de Exportação</label>
+      <textarea class="import-code-area" id="importCodeArea" placeholder="Cole aqui o código recebido..."></textarea>
+    </div>
+    <div id="importPreview" style="display:none">
+      <label class="form-label">Pré-visualização</label>
+      <div id="importPreviewContent" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px;font-size:11px;color:var(--text2);max-height:140px;overflow-y:auto;line-height:1.8"></div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('importModal')">Cancelar</button>
+      <button class="btn btn-ghost" onclick="previewImport()">👁 Pré-visualizar</button>
+      <button class="btn btn-primary" onclick="doImport()">📥 Importar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Novo Grupo -->
+<div class="overlay" id="groupModal">
+  <div class="modal">
+    <div class="modal-title">🗂 Novo Grupo</div>
+    <div class="modal-sub">Organize usuários e acessos compartilhados</div>
+
+    <div class="form-group">
+      <label class="form-label">Nome do Grupo</label>
+      <input class="form-input" id="gName" placeholder="Ex: Equipe de TI">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Descrição</label>
+      <input class="form-input" id="gDesc" placeholder="Ex: Acessos compartilhados da equipe de infra">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Ícone</label>
+      <div class="group-icon-picker" id="groupIconPicker">
+        <div class="icon-opt selected" data-icon="🗂" onclick="selectGroupIcon(this)">🗂</div>
+        <div class="icon-opt" data-icon="👥" onclick="selectGroupIcon(this)">👥</div>
+        <div class="icon-opt" data-icon="🏢" onclick="selectGroupIcon(this)">🏢</div>
+        <div class="icon-opt" data-icon="🖥️" onclick="selectGroupIcon(this)">🖥️</div>
+        <div class="icon-opt" data-icon="🔐" onclick="selectGroupIcon(this)">🔐</div>
+        <div class="icon-opt" data-icon="🌐" onclick="selectGroupIcon(this)">🌐</div>
+        <div class="icon-opt" data-icon="🛡️" onclick="selectGroupIcon(this)">🛡️</div>
+        <div class="icon-opt" data-icon="⚙️" onclick="selectGroupIcon(this)">⚙️</div>
+        <div class="icon-opt" data-icon="📦" onclick="selectGroupIcon(this)">📦</div>
+        <div class="icon-opt" data-icon="🚀" onclick="selectGroupIcon(this)">🚀</div>
+        <div class="icon-opt" data-icon="💼" onclick="selectGroupIcon(this)">💼</div>
+        <div class="icon-opt" data-icon="🔧" onclick="selectGroupIcon(this)">🔧</div>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Membros</label>
+      <div class="member-picker-list" id="groupMemberPicker"></div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('groupModal')">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveGroup()">Criar Grupo</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Editar Grupo -->
+<div class="overlay" id="editGroupModal">
+  <div class="modal">
+    <div class="modal-title">✏️ Editar Grupo</div>
+    <div class="modal-sub" id="editGroupModalSub">Atualize os dados do grupo</div>
+
+    <input type="hidden" id="egId">
+
+    <div class="form-group">
+      <label class="form-label">Nome do Grupo</label>
+      <input class="form-input" id="egName" placeholder="Ex: Equipe de TI">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Descrição</label>
+      <input class="form-input" id="egDesc" placeholder="Descrição opcional">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Ícone</label>
+      <div class="group-icon-picker" id="editGroupIconPicker">
+        <div class="icon-opt selected" data-icon="🗂" onclick="selectEditGroupIcon(this)">🗂</div>
+        <div class="icon-opt" data-icon="👥" onclick="selectEditGroupIcon(this)">👥</div>
+        <div class="icon-opt" data-icon="🏢" onclick="selectEditGroupIcon(this)">🏢</div>
+        <div class="icon-opt" data-icon="🖥️" onclick="selectEditGroupIcon(this)">🖥️</div>
+        <div class="icon-opt" data-icon="🔐" onclick="selectEditGroupIcon(this)">🔐</div>
+        <div class="icon-opt" data-icon="🌐" onclick="selectEditGroupIcon(this)">🌐</div>
+        <div class="icon-opt" data-icon="🛡️" onclick="selectEditGroupIcon(this)">🛡️</div>
+        <div class="icon-opt" data-icon="⚙️" onclick="selectEditGroupIcon(this)">⚙️</div>
+        <div class="icon-opt" data-icon="📦" onclick="selectEditGroupIcon(this)">📦</div>
+        <div class="icon-opt" data-icon="🚀" onclick="selectEditGroupIcon(this)">🚀</div>
+        <div class="icon-opt" data-icon="💼" onclick="selectEditGroupIcon(this)">💼</div>
+        <div class="icon-opt" data-icon="🔧" onclick="selectEditGroupIcon(this)">🔧</div>
+      </div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('editGroupModal')">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveEditGroup()">Salvar Alterações</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Adicionar Membro ao Grupo -->
+<div class="overlay" id="addMemberModal">
+  <div class="modal">
+    <div class="modal-title">👥 Adicionar Membros</div>
+    <div class="modal-sub" id="addMemberModalSub">Selecione usuários para o grupo</div>
+
+    <input type="hidden" id="amGroupId">
+
+    <div class="form-group">
+      <label class="form-label">Usuários disponíveis</label>
+      <div class="member-picker-list" id="addMemberList"></div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('addMemberModal')">Cancelar</button>
+      <button class="btn btn-primary" onclick="confirmAddMembers()">Adicionar Selecionados</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Acesso do Grupo -->
+<div class="overlay" id="groupAccessModal">
+  <div class="modal">
+    <div class="modal-title">🔑 Acesso do Grupo</div>
+    <div class="modal-sub" id="groupAccessModalSub">Credencial compartilhada pelo grupo</div>
+
+    <input type="hidden" id="gaGroupId">
+
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Tipo</label>
+        <select class="form-select" id="gaType">
+          <option value="web">🌐 Site / Web</option>
+          <option value="server">🖥️ Servidor / SSH</option>
+          <option value="db">🗄️ Banco de Dados</option>
+          <option value="vpn">🔒 VPN</option>
+          <option value="app">📱 Aplicativo</option>
+          <option value="other">📦 Outro</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Nome</label>
+        <input class="form-input" id="gaName" placeholder="Ex: GitHub Org">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">URL / Endereço</label>
+      <input class="form-input" id="gaUrl" placeholder="https://...">
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Usuário / Login</label>
+        <input class="form-input" id="gaUser" placeholder="usuario@email.com">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Senha</label>
+        <input class="form-input" id="gaPass" type="password" placeholder="••••••••">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Notas</label>
+      <input class="form-input" id="gaNotes" placeholder="Informações adicionais...">
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('groupAccessModal')">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveGroupAccess()">Adicionar Acesso</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Editar Acesso do Grupo -->
+<div class="overlay" id="editGroupAccessModal">
+  <div class="modal">
+    <div class="modal-title">✏️ Editar Acesso do Grupo</div>
+    <div class="modal-sub" id="editGroupAccessModalSub">Editando credencial compartilhada</div>
+
+    <input type="hidden" id="egaId">
+
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Tipo</label>
+        <select class="form-select" id="egaType">
+          <option value="web">🌐 Site / Web</option>
+          <option value="server">🖥️ Servidor / SSH</option>
+          <option value="db">🗄️ Banco de Dados</option>
+          <option value="vpn">🔒 VPN</option>
+          <option value="app">📱 Aplicativo</option>
+          <option value="other">📦 Outro</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Nome</label>
+        <input class="form-input" id="egaName" placeholder="Ex: GitHub Org">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">URL / Endereço</label>
+      <input class="form-input" id="egaUrl" placeholder="https://...">
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Usuário / Login</label>
+        <input class="form-input" id="egaUser" placeholder="usuario@email.com">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Senha</label>
+        <input class="form-input" id="egaPass" type="password" placeholder="••••••••">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Notas</label>
+      <input class="form-input" id="egaNotes" placeholder="Informações adicionais...">
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('editGroupAccessModal')">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveEditGroupAccess()">Salvar Alterações</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Compartilhar Projeto -->
+<div class="overlay" id="shareProjectModal">
+  <div class="modal">
+    <div class="modal-title">↗ Compartilhar Projeto</div>
+    <div class="modal-sub">Escolha o tipo de acesso para quem vai receber o link</div>
+
+    <!-- Tabs -->
+    <div class="spm-tabs">
+      <button class="spm-tab tab-view active" onclick="switchSpmTab('view',this)">👁 Somente leitura</button>
+      <button class="spm-tab tab-editor" onclick="switchSpmTab('editor',this)">✏️ Editor</button>
+    </div>
+
+    <!-- Panel: Visualização -->
+    <div class="spm-panel active" id="spm-view">
+      <div class="share-link-warning">
+        ⚠️ O link contém <strong>todos os seus dados</strong>, incluindo senhas. Quem receber poderá <strong>apenas visualizar</strong> — sem editar ou excluir.
+      </div>
+      <div class="form-group">
+        <label class="form-label">Link de visualização</label>
+        <div class="share-link-box" id="shareLinkView">Clique em "Gerar link" para criar.</div>
+      </div>
+      <div class="modal-actions" style="justify-content:flex-end;gap:8px;padding-top:0">
+        <button class="btn btn-ghost" id="copyShareLinkView" onclick="copyLinkView()" style="display:none">⎘ Copiar</button>
+        <button class="btn btn-primary" onclick="generateShareLink('view')">🔗 Gerar link</button>
+      </div>
+    </div>
+
+    <!-- Panel: Editor -->
+    <div class="spm-panel" id="spm-editor">
+      <div class="share-link-warning-editor">
+        ✏️ Quem receber este link precisará digitar a senha para entrar no modo editor. Defina uma senha abaixo.
+      </div>
+      <div class="form-group">
+        <label class="form-label">Senha do editor</label>
+        <div class="login-input-wrap">
+          <input class="form-input" type="password" id="editorSharePass" placeholder="Digite uma senha para o link de editor">
+          <button class="toggle-pass-btn" onclick="toggleSettingsPass('editorSharePass')" title="Mostrar/ocultar">👁</button>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Link de editor</label>
+        <div class="share-link-box" id="shareLinkEditor">Defina uma senha e clique em "Gerar link".</div>
+      </div>
+      <div class="modal-actions" style="justify-content:flex-end;gap:8px;padding-top:0">
+        <button class="btn btn-ghost" id="copyShareLinkEditor" onclick="copyLinkEditor()" style="display:none">⎘ Copiar</button>
+        <button class="btn btn-primary" style="background:var(--accent3);color:#000" onclick="generateShareLink('editor')">🔗 Gerar link</button>
+      </div>
+    </div>
+
+    <div style="padding-top:16px;border-top:1px solid var(--border);margin-top:4px;text-align:right">
+      <button class="btn btn-ghost" onclick="closeModal('shareProjectModal')">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<!-- EDITOR AUTH SCREEN -->
+<div id="editorAuthScreen" style="display:none">
+  <div class="editor-auth-box">
+    <div class="editor-auth-logo">
+      <div class="editor-auth-icon">✏️</div>
+      <div class="editor-auth-title">Acesso de Editor</div>
+      <div class="editor-auth-sub">Digite a senha para entrar no modo de edição</div>
+    </div>
+    <div class="editor-auth-error" id="editorAuthError">Senha incorreta. Tente novamente.</div>
+    <div class="form-group">
+      <label class="form-label">Senha do editor</label>
+      <div class="login-input-wrap">
+        <input class="form-input" type="password" id="editorAuthInput" placeholder="Digite a senha" onkeydown="if(event.key==='Enter')doEditorAuth()">
+        <button class="toggle-pass-btn" onclick="toggleSettingsPass('editorAuthInput')" title="Mostrar/ocultar">👁</button>
+      </div>
+    </div>
+    <button class="editor-auth-btn" onclick="doEditorAuth()">Entrar como editor →</button>
+  </div>
+</div>
+
+<!-- EDITOR EXPORT BUTTON (visible only in editor-mode) -->
+<button class="editor-export-btn" onclick="openEditorExportModal()">
+  📤 Exportar alterações
+</button>
+
+<!-- MODAL: Exportar alterações (editor) -->
+<div class="overlay" id="editorExportModal">
+  <div class="modal">
+    <div class="modal-title">📤 Exportar Alterações</div>
+    <div class="modal-sub">Envie este código para o dono do projeto importar as suas alterações</div>
+
+    <div class="share-link-warning-editor" style="margin-bottom:16px">
+      ✏️ Copie o código abaixo e envie para o dono do projeto. Ele poderá mesclar suas alterações com os dados dele.
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Código de exportação</label>
+      <div class="share-link-box" id="editorExportCode" style="font-size:10px;max-height:140px">
+        Clique em "Gerar código" para exportar.
+      </div>
+    </div>
+
+    <div class="modal-actions" style="justify-content:flex-end;gap:8px">
+      <button class="btn btn-ghost" onclick="closeModal('editorExportModal')">Fechar</button>
+      <button class="btn btn-ghost" id="copyEditorExportBtn" onclick="copyEditorExport()" style="display:none">⎘ Copiar</button>
+      <button class="btn btn-primary" style="background:var(--accent3);color:#000" onclick="generateEditorExport()">📤 Gerar código</button>
+    </div>
+  </div>
+</div>
+
+<!-- BULK ACTION BAR (usuários) -->
+<div class="bulk-bar" id="bulkBar">
+  <span class="bulk-count" id="bulkCount">0 selecionado(s)</span>
+  <div class="bulk-divider"></div>
+  <button class="bulk-btn bulk-btn-share" onclick="bulkShare()">↗ Compartilhar</button>
+  <button class="bulk-btn bulk-btn-delete" onclick="bulkDelete()">🗑 Excluir</button>
+  <div class="bulk-divider"></div>
+  <button class="bulk-btn bulk-btn-cancel" onclick="exitSelectionMode()">✕ Cancelar</button>
+</div>
+
+<!-- BULK ACTION BAR (grupos) -->
+<div class="bulk-bar bulk-bar-group" id="groupBulkBar">
+  <span class="bulk-count" id="groupBulkCount">0 selecionado(s)</span>
+  <div class="bulk-divider"></div>
+  <button class="bulk-btn bulk-btn-share" onclick="groupBulkShare()">↗ Compartilhar</button>
+  <button class="bulk-btn bulk-btn-delete" onclick="groupBulkDelete()">🗑 Excluir</button>
+  <div class="bulk-divider"></div>
+  <button class="bulk-btn bulk-btn-cancel" onclick="exitGroupSelectionMode()">✕ Cancelar</button>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast">
+  <span class="toast-icon" id="toastIcon">✓</span>
+  <span id="toastMsg">Ação realizada</span>
+</div>
+
+<script>
+// ——— DATA ———
+let users    = JSON.parse(localStorage.getItem('av_users')    || '[]');
+let accesses = JSON.parse(localStorage.getItem('av_accesses') || '[]');
+let groups   = JSON.parse(localStorage.getItem('av_groups')   || '[]');
+let groupAccesses = JSON.parse(localStorage.getItem('av_group_accesses') || '[]');
+
+let selectedUserId  = null;
+let selectedGroupId = null;
+let selectedColor   = '#00e5ff';
+
+const typeIcons  = { web:'🌐', server:'🖥️', db:'🗄️', vpn:'🔒', app:'📱', other:'📦' };
+const typeLabels = { web:'Web', server:'Servidor', db:'Banco de Dados', vpn:'VPN', app:'Aplicativo', other:'Outro' };
+
+function save() {
+  localStorage.setItem('av_users',          JSON.stringify(users));
+  localStorage.setItem('av_accesses',       JSON.stringify(accesses));
+  localStorage.setItem('av_groups',         JSON.stringify(groups));
+  localStorage.setItem('av_group_accesses', JSON.stringify(groupAccesses));
+}
+
+function initials(name) {
+  return name.split(' ').map(n=>n[0]).join('').toUpperCase().slice(0,2);
+}
+
+function formatDate(iso) {
+  return new Date(iso).toLocaleDateString('pt-BR');
+}
+
+// ——— SIDEBAR ———
+function renderUsers() {
+  const q = document.getElementById('userSearch').value.toLowerCase();
+  const list = document.getElementById('userList');
+  const filtered = users.filter(u =>
+    u.name.toLowerCase().includes(q) || (u.email||'').toLowerCase().includes(q)
+  );
+
+  if (filtered.length === 0) {
+    list.innerHTML = `<div style="padding:16px 12px;font-size:11px;color:var(--text3)">Nenhum usuário encontrado</div>`;
+    return;
+  }
+
+  list.innerHTML = filtered.map(u => {
+    const count = accesses.filter(a=>a.userId===u.id).length;
+    return `
+    <div class="user-item ${selectedUserId===u.id?'active':''}" onclick="selectUser('${u.id}')">
+      <div class="avatar" style="background:${u.color}20;color:${u.color}">${initials(u.name)}</div>
+      <div class="user-info">
+        <div class="user-name">${u.name}</div>
+        <div class="user-role">${u.role||'—'}</div>
+      </div>
+      <span class="access-badge">${count}</span>
+    </div>`;
+  }).join('');
+}
+
+function filterUsers() { renderUsers(); }
+
+// ——— GROUPS SIDEBAR ———
+function renderGroups() {
+  const list = document.getElementById('groupList');
+  if (!list) return;
+
+  if (groups.length === 0) {
+    list.innerHTML = `<div style="padding:10px 12px 4px;font-size:11px;color:var(--text3);line-height:1.6">Nenhum grupo criado ainda.<br>Clique em <strong style="color:var(--text2)">+</strong> para criar.</div>`;
+    return;
+  }
+
+  list.innerHTML = groups.map(g => {
+    const memberCount = (g.members||[]).length;
+    const accessCount = groupAccesses.filter(a => a.groupId === g.id).length;
+    return `
+    <div class="group-item ${selectedGroupId===g.id?'active':''}" onclick="selectGroup('${g.id}')">
+      <div class="group-icon" style="background:rgba(124,58,237,0.12);color:#a78bfa">${g.icon||'🗂'}</div>
+      <div class="group-item-info">
+        <div class="group-item-name">${g.name}</div>
+        <div class="group-item-meta">${memberCount} membro${memberCount!==1?'s':''} · ${accessCount} acesso${accessCount!==1?'s':''}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ——— SELECT GROUP ———
+function selectGroup(id) {
+  selectedGroupId       = id;
+  selectedUserId        = null;
+  activeGroupTypeFilter = 'all';
+  if (groupSelectionMode) { groupSelectionMode = false; selectedGroupAccessIds.clear(); const bb = document.getElementById('groupBulkBar'); if(bb) bb.classList.remove('visible'); }
+  document.getElementById('settingsNavBtn').classList.remove('active');
+  renderUsers(); renderGroups();
+  renderGroupDetail();
+}
+
+// ——— GROUP DETAIL ———
+function renderGroupDetail() {
+  const g = groups.find(x => x.id === selectedGroupId);
+  if (!g) return;
+
+  const members    = (g.members||[]).map(mid => users.find(u => u.id === mid)).filter(Boolean);
+  const gAccesses  = groupAccesses.filter(a => a.groupId === g.id);
+  const types      = [...new Set(gAccesses.map(a => a.type))];
+
+  document.getElementById('headerTitle').textContent = g.name;
+  document.getElementById('headerSub').textContent   = g.desc || 'Grupo de acessos compartilhados';
+  document.getElementById('headerActions').innerHTML = `
+    <button class="btn btn-ghost btn-danger" onclick="deleteGroup('${g.id}')">🗑 Remover</button>
+    <button class="btn btn-ghost" onclick="openEditGroup('${g.id}')">✏️ Editar</button>
+    <button class="btn btn-ghost" style="color:#a78bfa;border-color:rgba(124,58,237,0.35)" onclick="openAddMember('${g.id}')">👥 + Membro</button>
+    <button class="select-mode-btn" id="groupSelectModeBtn" onclick="toggleGroupSelectionMode()">☐ Selecionar</button>
+    <button class="btn btn-primary" onclick="openGroupAccessModal('${g.id}')">+ Adicionar Acesso</button>
+  `;
+
+  const content = document.getElementById('mainContent');
+  content.innerHTML = `
+  <div class="group-detail">
+    <div class="group-header-card">
+      <div class="group-big-icon" style="background:rgba(124,58,237,0.12);color:#a78bfa;border:2px solid rgba(124,58,237,0.25)">${g.icon||'🗂'}</div>
+      <div class="group-header-info">
+        <div class="group-header-name">${g.name}</div>
+        ${g.desc ? `<div class="group-header-desc">${g.desc}</div>` : ''}
+      </div>
+    </div>
+
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-label">Membros</div>
+        <div class="stat-value" style="color:#a78bfa">${members.length}</div>
+        <div class="stat-sub">usuários no grupo</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Acessos do Grupo</div>
+        <div class="stat-value" style="color:var(--accent)">${gAccesses.length}</div>
+        <div class="stat-sub">credenciais compartilhadas</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Tipos</div>
+        <div class="stat-value" style="color:var(--accent3);font-size:${types.length>0?'28':'28'}px">${types.length}</div>
+        <div class="stat-sub">${types.map(t=>typeLabels[t]).join(', ')||'—'}</div>
+      </div>
+    </div>
+
+    <div class="tabs-bar">
+      <button class="tab-btn active" onclick="switchTab('gtab-acessos',this)">🔑 Acessos (${gAccesses.length})</button>
+      <button class="tab-btn" onclick="switchTab('gtab-membros',this)">👥 Membros (${members.length})</button>
+    </div>
+
+    <div class="tab-panel active" id="gtab-acessos">
+      ${gAccesses.length > 0 ? `
+      <div class="access-search-wrap">
+        <div class="access-search-box">
+          <span class="access-search-icon">⌕</span>
+          <input
+            type="text"
+            id="groupAccessSearchInput"
+            placeholder="Buscar por nome, login, URL, notas..."
+            oninput="filterGroupAccesses()"
+            autocomplete="off"
+          >
+          <button class="clear-search-btn" id="clearGroupAccessSearch" onclick="clearGroupAccessSearch()">✕</button>
+        </div>
+        <div class="filter-chips" id="groupTypeFilterChips">
+          <div class="chip active-chip" data-type="all" onclick="toggleGroupTypeFilter(this)">Todos</div>
+          ${[...new Set(gAccesses.map(a=>a.type))].map(t=>`
+            <div class="chip chip-${t}" data-type="${t}" onclick="toggleGroupTypeFilter(this)">${typeIcons[t]} ${typeLabels[t]}</div>
+          `).join('')}
+        </div>
+      </div>
+      <div class="search-result-info" id="groupAccessSearchInfo" style="display:none">
+        Mostrando <span id="groupAccessResultCount">0</span> resultado(s)
+      </div>
+      ` : ''}
+      <div class="access-grid${groupSelectionMode?' selection-mode':''}" id="groupAccessGrid">
+        ${gAccesses.length === 0
+          ? `<div class="no-access">Nenhum acesso cadastrado neste grupo ainda.<br>Clique em <strong>"+ Adicionar Acesso"</strong> para começar.</div>`
+          : gAccesses.map(a => renderGroupAccessCard(a)).join('')
+        }
+      </div>
+    </div>
+
+    <div class="tab-panel" id="gtab-membros">
+      <div style="display:flex;justify-content:flex-end;margin-bottom:14px">
+        <button class="btn btn-ghost" style="color:#a78bfa;border-color:rgba(124,58,237,0.35)" onclick="openAddMember('${g.id}')">👥 + Adicionar Membro</button>
+      </div>
+      ${members.length === 0
+        ? `<div class="no-members">Nenhum membro ainda.<br>Clique em <strong>"+ Membro"</strong> para adicionar usuários a este grupo.</div>`
+        : `<div class="members-grid">${members.map(u => `
+            <div class="member-card" onclick="selectUser('${u.id}')">
+              <div class="member-avatar" style="background:${u.color}18;color:${u.color}">${initials(u.name)}</div>
+              <div class="member-info">
+                <div class="member-name">${u.name}</div>
+                <div class="member-role">${u.role||u.dept||'—'}</div>
+              </div>
+              <button class="member-remove-btn" onclick="event.stopPropagation();removeMember('${g.id}','${u.id}')" title="Remover do grupo">✕</button>
+            </div>`).join('')}
+          </div>`
+      }
+    </div>
+  </div>`;
+}
+
+function renderGroupAccessCard(a) {
+  const isSelected = groupSelectionMode && selectedGroupAccessIds.has(a.id);
+  return `
+  <div class="access-card border-${a.type}${groupSelectionMode?' selectable':''}${isSelected?' card-selected':''}" id="gcard-${a.id}" onclick="${groupSelectionMode?`toggleGroupCardSelect('${a.id}')`:''}" >
+    <div class="card-select-check">${isSelected?'✓':''}</div>
+    <div class="access-card-head">
+      <span class="access-icon">${typeIcons[a.type]}</span>
+      <span class="access-type-badge type-${a.type}">${typeLabels[a.type]}</span>
+    </div>
+    <div class="access-title">${a.name}${a.sharedFrom?` <span style="font-size:9px;background:rgba(124,58,237,0.12);color:#a78bfa;border:1px solid rgba(124,58,237,0.25);border-radius:10px;padding:1px 7px;font-weight:500;vertical-align:middle">↗ de ${a.sharedFrom}</span>`:''}</div>
+    <div class="access-url">${a.url||'—'}</div>
+    <div class="access-creds">
+      <div class="cred-row">
+        <span class="cred-label">login</span>
+        <span class="cred-val">${a.user||'—'} ${a.user?`<button class="copy-btn" onclick="event.stopPropagation();copyText('${a.user}','Login')">⎘</button>`:''}</span>
+      </div>
+      <div class="cred-row">
+        <span class="cred-label">senha</span>
+        <span class="cred-val">
+          <span class="pass-dots" id="gpass-${a.id}">••••••••</span>
+          ${a.pass ? `<button class="reveal-btn" onclick="event.stopPropagation();toggleGroupPass('${a.id}','${a.pass.replace(/'/g,"\\'")}')">👁</button>
+          <button class="copy-btn" onclick="event.stopPropagation();copyText('${a.pass.replace(/'/g,"\\'")}','Senha')">⎘</button>` : ''}
+        </span>
+      </div>
+      ${a.notes ? `<div class="cred-row"><span class="cred-label">nota</span><span class="cred-val" style="color:var(--text2)">${a.notes}</span></div>` : ''}
+    </div>
+    <div class="access-footer">
+      <span class="access-date">${formatDate(a.createdAt)}</span>
+      <div class="access-footer-actions">
+        <button class="edit-access-btn" onclick="event.stopPropagation();openEditGroupAccess('${a.id}')" title="Editar acesso">✏️</button>
+        <button class="edit-access-btn" onclick="event.stopPropagation();openShareGroupAccess('${a.id}')" title="Compartilhar acesso" style="font-size:13px">↗</button>
+        <button class="delete-access-btn" onclick="event.stopPropagation();deleteGroupAccess('${a.id}')" title="Remover acesso">🗑</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function toggleGroupPass(id, val) {
+  const el = document.getElementById('gpass-' + id);
+  if (el) el.textContent = el.textContent === '••••••••' ? val : '••••••••';
+}
+
+// ——— SELECT USER ———
+function selectUser(id) {
+  if (selectionMode) { selectionMode = false; selectedAccessIds.clear(); const bb = document.getElementById('bulkBar'); if(bb) bb.classList.remove('visible'); }
+  selectedUserId  = id;
+  selectedGroupId = null;
+  document.getElementById('settingsNavBtn').classList.remove('active');
+  renderUsers(); renderGroups();
+  renderDetail();
+}
+
+function renderDetail() {
+  const u = users.find(x=>x.id===selectedUserId);
+  if (!u) return;
+
+  const uAccesses = accesses.filter(a=>a.userId===u.id);
+  const types = [...new Set(uAccesses.map(a=>a.type))];
+
+  document.getElementById('headerTitle').textContent = u.name;
+  document.getElementById('headerSub').textContent = `${u.email||'sem e-mail'} · ${u.dept||''} ${u.role||''}`.trim();
+  document.getElementById('headerActions').innerHTML = `
+    <button class="btn btn-ghost btn-danger" onclick="deleteUser('${u.id}')">🗑 Remover</button>
+    <button class="btn btn-ghost" onclick="openEditUser('${u.id}')">✏️ Editar</button>
+    <button class="btn btn-ghost btn-share" onclick="openShareModal()">↗ Compartilhar</button>
+    <button class="select-mode-btn" id="selectModeBtn" onclick="toggleSelectionMode()">☐ Selecionar</button>
+    <button class="btn btn-primary" onclick="openModal('accessModal')">+ Adicionar Acesso</button>
+  `;
+
+  const content = document.getElementById('mainContent');
+
+  content.innerHTML = `
+  <div class="user-detail">
+    <div class="detail-header">
+      <div class="detail-avatar" style="background:${u.color}18;color:${u.color};border:2px solid ${u.color}40">${initials(u.name)}</div>
+      <div class="detail-info">
+        <div class="detail-name">${u.name}</div>
+        <div class="detail-meta">
+          <span>📧 ${u.email||'—'}</span>
+          <span>💼 ${u.role||'—'}</span>
+          <span>🏢 ${u.dept||'—'}</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-label">Total de Acessos</div>
+        <div class="stat-value" style="color:var(--accent)">${uAccesses.length}</div>
+        <div class="stat-sub">credenciais cadastradas</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Tipos de Acesso</div>
+        <div class="stat-value" style="color:#a78bfa">${types.length}</div>
+        <div class="stat-sub">${types.map(t=>typeLabels[t]).join(', ')||'—'}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Cadastrado em</div>
+        <div class="stat-value" style="color:var(--accent3);font-size:20px">${formatDate(u.createdAt)}</div>
+        <div class="stat-sub">data de criação</div>
+      </div>
+    </div>
+
+    <div class="tabs-bar">
+      <button class="tab-btn active" onclick="switchTab('tab-acessos',this)">🔑 Acessos (${uAccesses.length})</button>
+      <button class="tab-btn" onclick="switchTab('tab-obs',this)">📝 Observações</button>
+    </div>
+
+    <div class="tab-panel active" id="tab-acessos">
+      ${uAccesses.length > 0 ? `
+      <div class="access-search-wrap">
+        <div class="access-search-box">
+          <span class="access-search-icon">⌕</span>
+          <input
+            type="text"
+            id="accessSearchInput"
+            placeholder="Buscar por nome, login, URL, notas..."
+            oninput="filterAccesses()"
+            autocomplete="off"
+          >
+          <button class="clear-search-btn" id="clearAccessSearch" onclick="clearAccessSearch()">✕</button>
+        </div>
+        <div class="filter-chips" id="typeFilterChips">
+          <div class="chip active-chip" data-type="all" onclick="toggleTypeFilter(this)">Todos</div>
+          ${[...new Set(uAccesses.map(a=>a.type))].map(t=>`
+            <div class="chip chip-${t}" data-type="${t}" onclick="toggleTypeFilter(this)">${typeIcons[t]} ${typeLabels[t]}</div>
+          `).join('')}
+        </div>
+      </div>
+      <div class="search-result-info" id="accessSearchInfo" style="display:none">
+        Mostrando <span id="accessResultCount">0</span> resultado(s)
+      </div>
+      ` : ''}
+      <div class="access-grid" id="accessGrid">
+        ${uAccesses.length === 0
+          ? `<div class="no-access">Nenhum acesso cadastrado ainda.<br>Clique em <strong>"+ Adicionar Acesso"</strong> para começar.</div>`
+          : uAccesses.map(a => renderAccessCard(a)).join('')
+        }
+      </div>
+    </div>
+
+    <div class="tab-panel" id="tab-obs">
+      <textarea class="obs-area" id="userObsArea" placeholder="Registre aqui observações gerais sobre o usuário: histórico, restrições de acesso, datas de revisão, responsável, etc...">${u.observations||''}</textarea>
+      <div class="obs-save-row">
+        <span class="obs-hint">As observações são salvas automaticamente.</span>
+        <button class="btn btn-primary" onclick="saveUserObs('${u.id}')">💾 Salvar Observações</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderAccessCard(a) {
+  const isSelected = selectionMode && selectedAccessIds.has(a.id);
+  return `
+  <div class="access-card border-${a.type}${selectionMode?' selectable':''}${isSelected?' card-selected':''}" id="card-${a.id}" onclick="${selectionMode?`toggleCardSelect('${a.id}')`:''}" >
+    <div class="card-select-check">${isSelected?'✓':''}</div>
+    <div class="access-card-head">
+      <span class="access-icon">${typeIcons[a.type]}</span>
+      <span class="access-type-badge type-${a.type}">${typeLabels[a.type]}</span>
+    </div>
+    <div class="access-title">${a.name}${a.sharedFrom?` <span style="font-size:9px;background:rgba(124,58,237,0.12);color:#a78bfa;border:1px solid rgba(124,58,237,0.25);border-radius:10px;padding:1px 7px;font-weight:500;vertical-align:middle">↗ de ${a.sharedFrom}</span>`:''}</div>
+    <div class="access-url">${a.url||'—'}</div>
+    <div class="access-creds">
+      <div class="cred-row">
+        <span class="cred-label">login</span>
+        <span class="cred-val">
+          ${a.user||'—'}
+          ${a.user ? `<button class="copy-btn" onclick="event.stopPropagation();copyText('${escHtml(a.user)}','Login')">⎘</button>` : ''}
+        </span>
+      </div>
+      <div class="cred-row">
+        <span class="cred-label">senha</span>
+        <span class="cred-val">
+          <span id="pass-${a.id}" class="pass-dots">••••••••</span>
+          <button class="reveal-btn" onclick="event.stopPropagation();togglePass('${a.id}','${escHtml(a.pass)}')">👁</button>
+          <button class="copy-btn" onclick="event.stopPropagation();copyText('${escHtml(a.pass)}','Senha')">⎘</button>
+        </span>
+      </div>
+      ${a.notes ? `<div class="cred-row"><span class="cred-label">nota</span><span class="cred-val" style="color:var(--text2)">${a.notes}</span></div>` : ''}
+      ${a.observations ? `<div class="cred-row" style="margin-top:4px"><span class="cred-label">obs</span><span class="cred-val" style="color:var(--text2);white-space:pre-wrap;font-size:10px;line-height:1.5">${a.observations.length>120?a.observations.slice(0,120)+'…':a.observations}</span></div>` : ''}
+    </div>
+    <div class="access-footer">
+      <span class="access-date">Adicionado em ${formatDate(a.createdAt)}${a.updatedAt ? ` · editado ${formatDate(a.updatedAt)}` : ''}</span>
+      <div class="access-footer-actions">
+        <button class="edit-access-btn" onclick="event.stopPropagation();openEditAccess('${a.id}')" title="Editar acesso">✏️</button>
+        <button class="edit-access-btn" onclick="event.stopPropagation();openShareSingleAccess('${a.id}')" title="Compartilhar acesso" style="font-size:13px">↗</button>
+        <button class="delete-access-btn" onclick="event.stopPropagation();deleteAccess('${a.id}')" title="Remover acesso">✕</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function escHtml(str) {
+  return (str||'').replace(/'/g,"\\'").replace(/"/g,'&quot;');
+}
+
+// ——— ACCESS SEARCH & FILTER ———
+let activeTypeFilter = 'all';
+
+function highlight(text, query) {
+  if (!query) return text;
+  const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return String(text).replace(new RegExp(escaped, 'gi'), m => `<span class="hl">${m}</span>`);
+}
+
+function filterAccesses() {
+  if (!selectedUserId) return;
+  const input = document.getElementById('accessSearchInput');
+  if (!input) return;
+
+  const q = input.value.trim().toLowerCase();
+  const clearBtn = document.getElementById('clearAccessSearch');
+  const infoBar  = document.getElementById('accessSearchInfo');
+  const countEl  = document.getElementById('accessResultCount');
+
+  if (clearBtn) clearBtn.classList.toggle('visible', q.length > 0);
+
+  let pool = accesses.filter(a => a.userId === selectedUserId);
+
+  // type filter
+  if (activeTypeFilter !== 'all') pool = pool.filter(a => a.type === activeTypeFilter);
+
+  // text filter
+  if (q) {
+    pool = pool.filter(a =>
+      (a.name||'').toLowerCase().includes(q) ||
+      (a.url||'').toLowerCase().includes(q) ||
+      (a.user||'').toLowerCase().includes(q) ||
+      (a.notes||'').toLowerCase().includes(q) ||
+      (a.observations||'').toLowerCase().includes(q) ||
+      (typeLabels[a.type]||'').toLowerCase().includes(q)
+    );
+  }
+
+  const grid = document.getElementById('accessGrid');
+  if (!grid) return;
+
+  const isFiltering = q || activeTypeFilter !== 'all';
+  if (infoBar) infoBar.style.display = isFiltering ? 'flex' : 'none';
+  if (countEl) countEl.textContent = pool.length;
+
+  if (pool.length === 0) {
+    grid.innerHTML = `<div class="no-access">Nenhum acesso encontrado para "<strong>${q||typeLabels[activeTypeFilter]}</strong>".</div>`;
+    return;
+  }
+
+  grid.innerHTML = pool.map(a => renderAccessCard(a, q)).join('');
+}
+
+function toggleTypeFilter(el) {
+  const chips = document.querySelectorAll('#typeFilterChips .chip');
+  chips.forEach(c => c.classList.remove('active-chip'));
+  el.classList.add('active-chip');
+  activeTypeFilter = el.dataset.type;
+  filterAccesses();
+}
+
+function clearAccessSearch() {
+  const input = document.getElementById('accessSearchInput');
+  if (input) { input.value = ''; input.focus(); }
+  const clearBtn = document.getElementById('clearAccessSearch');
+  if (clearBtn) clearBtn.classList.remove('visible');
+  filterAccesses();
+}
+
+// ——— GROUP ACCESS SEARCH & FILTER ———
+let activeGroupTypeFilter = 'all';
+
+function filterGroupAccesses() {
+  if (!selectedGroupId) return;
+  const input = document.getElementById('groupAccessSearchInput');
+  if (!input) return;
+
+  const q        = input.value.trim().toLowerCase();
+  const clearBtn = document.getElementById('clearGroupAccessSearch');
+  const infoBar  = document.getElementById('groupAccessSearchInfo');
+  const countEl  = document.getElementById('groupAccessResultCount');
+
+  if (clearBtn) clearBtn.classList.toggle('visible', q.length > 0);
+
+  let pool = groupAccesses.filter(a => a.groupId === selectedGroupId);
+
+  if (activeGroupTypeFilter !== 'all') pool = pool.filter(a => a.type === activeGroupTypeFilter);
+
+  if (q) {
+    pool = pool.filter(a =>
+      (a.name||'').toLowerCase().includes(q) ||
+      (a.url||'').toLowerCase().includes(q)  ||
+      (a.user||'').toLowerCase().includes(q) ||
+      (a.notes||'').toLowerCase().includes(q)||
+      (typeLabels[a.type]||'').toLowerCase().includes(q)
+    );
+  }
+
+  const grid = document.getElementById('groupAccessGrid');
+  if (!grid) return;
+
+  const isFiltering = q || activeGroupTypeFilter !== 'all';
+  if (infoBar) infoBar.style.display = isFiltering ? 'flex' : 'none';
+  if (countEl) countEl.textContent = pool.length;
+
+  if (pool.length === 0) {
+    grid.innerHTML = `<div class="no-access">Nenhum acesso encontrado para "<strong>${q || typeLabels[activeGroupTypeFilter]}</strong>".</div>`;
+    return;
+  }
+
+  grid.innerHTML = pool.map(a => renderGroupAccessCard(a)).join('');
+}
+
+function toggleGroupTypeFilter(el) {
+  document.querySelectorAll('#groupTypeFilterChips .chip').forEach(c => c.classList.remove('active-chip'));
+  el.classList.add('active-chip');
+  activeGroupTypeFilter = el.dataset.type;
+  filterGroupAccesses();
+}
+
+function clearGroupAccessSearch() {
+  const input = document.getElementById('groupAccessSearchInput');
+  if (input) { input.value = ''; input.focus(); }
+  const clearBtn = document.getElementById('clearGroupAccessSearch');
+  if (clearBtn) clearBtn.classList.remove('visible');
+  activeGroupTypeFilter = 'all';
+  document.querySelectorAll('#groupTypeFilterChips .chip').forEach(c => c.classList.remove('active-chip'));
+  const allChip = document.querySelector('#groupTypeFilterChips [data-type="all"]');
+  if (allChip) allChip.classList.add('active-chip');
+  filterGroupAccesses();
+}
+
+// ——— SELECTION MODE ———
+let selectionMode     = false;
+let selectedAccessIds = new Set();
+
+let groupSelectionMode     = false;
+let selectedGroupAccessIds = new Set();
+
+function toggleSelectionMode() {
+  selectionMode = !selectionMode;
+  selectedAccessIds.clear();
+  const btn = document.getElementById('selectModeBtn');
+  if (btn) {
+    btn.classList.toggle('active', selectionMode);
+    btn.textContent = selectionMode ? '✕ Cancelar seleção' : '☐ Selecionar';
+  }
+  const grid = document.getElementById('accessGrid');
+  if (grid) grid.classList.toggle('selection-mode', selectionMode);
+  _updateBulkBar();
+  renderDetail();
+}
+
+function exitSelectionMode() {
+  selectionMode = false;
+  selectedAccessIds.clear();
+  const btn = document.getElementById('selectModeBtn');
+  if (btn) { btn.classList.remove('active'); btn.textContent = '☐ Selecionar'; }
+  _updateBulkBar();
+  renderDetail();
+}
+
+function toggleGroupSelectionMode() {
+  groupSelectionMode = !groupSelectionMode;
+  selectedGroupAccessIds.clear();
+  const btn = document.getElementById('groupSelectModeBtn');
+  if (btn) {
+    btn.classList.toggle('active', groupSelectionMode);
+    btn.textContent = groupSelectionMode ? '✕ Cancelar seleção' : '☐ Selecionar';
+  }
+  _updateGroupBulkBar();
+  renderGroupDetail();
+}
+
+function exitGroupSelectionMode() {
+  groupSelectionMode = false;
+  selectedGroupAccessIds.clear();
+  const btn = document.getElementById('groupSelectModeBtn');
+  if (btn) { btn.classList.remove('active'); btn.textContent = '☐ Selecionar'; }
+  _updateGroupBulkBar();
+  renderGroupDetail();
+}
+
+function toggleCardSelect(id) {
+  if (!selectionMode) return;
+  if (selectedAccessIds.has(id)) selectedAccessIds.delete(id);
+  else selectedAccessIds.add(id);
+  const card  = document.getElementById('card-' + id);
+  const check = card && card.querySelector('.card-select-check');
+  if (card)  card.classList.toggle('card-selected', selectedAccessIds.has(id));
+  if (check) check.textContent = selectedAccessIds.has(id) ? '✓' : '';
+  _updateBulkBar();
+}
+
+function toggleGroupCardSelect(id) {
+  if (!groupSelectionMode) return;
+  if (selectedGroupAccessIds.has(id)) selectedGroupAccessIds.delete(id);
+  else selectedGroupAccessIds.add(id);
+  const card  = document.getElementById('gcard-' + id);
+  const check = card && card.querySelector('.card-select-check');
+  if (card)  card.classList.toggle('card-selected', selectedGroupAccessIds.has(id));
+  if (check) check.textContent = selectedGroupAccessIds.has(id) ? '✓' : '';
+  _updateGroupBulkBar();
+}
+
+function _updateBulkBar() {
+  const bar = document.getElementById('bulkBar');
+  const cnt = document.getElementById('bulkCount');
+  if (!bar) return;
+  const n = selectedAccessIds.size;
+  bar.classList.toggle('visible', selectionMode && n > 0);
+  if (cnt) cnt.textContent = `${n} selecionado${n !== 1 ? 's' : ''}`;
+}
+
+function _updateGroupBulkBar() {
+  const bar = document.getElementById('groupBulkBar');
+  const cnt = document.getElementById('groupBulkCount');
+  if (!bar) return;
+  const n = selectedGroupAccessIds.size;
+  bar.classList.toggle('visible', groupSelectionMode && n > 0);
+  if (cnt) cnt.textContent = `${n} selecionado${n !== 1 ? 's' : ''}`;
+}
+
+function bulkDelete() {
+  const ids = [...selectedAccessIds];
+  if (ids.length === 0) return;
+  if (!confirm(`Remover ${ids.length} acesso(s) selecionado(s)?`)) return;
+  accesses = accesses.filter(a => !ids.includes(a.id));
+  save();
+  exitSelectionMode();
+  renderUsers(); renderGroups();
+  toast('🗑', `${ids.length} acesso(s) removido(s)`);
+}
+
+function groupBulkDelete() {
+  const ids = [...selectedGroupAccessIds];
+  if (ids.length === 0) return;
+  if (!confirm(`Remover ${ids.length} acesso(s) selecionado(s) do grupo?`)) return;
+  groupAccesses = groupAccesses.filter(a => !ids.includes(a.id));
+  save();
+  exitGroupSelectionMode();
+  renderGroups();
+  toast('🗑', `${ids.length} acesso(s) removido(s)`);
+}
+
+function bulkShare() {
+  if (selectedAccessIds.size === 0) return;
+  shareSingleAccessId = null;
+  shareSourceType     = 'user';
+  _initShareModal(null, [...selectedAccessIds]);
+}
+
+function groupBulkShare() {
+  if (selectedGroupAccessIds.size === 0) return;
+  shareSingleAccessId = null;
+  shareSourceType     = 'group';
+  _initShareModalGroup(null, [...selectedGroupAccessIds]);
+}
+
+let shareStep = 1;
+let shareSelectedAccessIds = [];
+let shareTargetId   = null;   // user id or group id
+let shareTargetType = 'user'; // 'user' | 'group'
+let shareSingleAccessId = null;
+let shareSourceType = 'user'; // 'user' | 'group' — where accesses come from
+
+function openShareModal() {
+  if (!selectedUserId) return;
+  shareSourceType     = 'user';
+  shareSingleAccessId = null;
+  _initShareModal();
+}
+
+function openShareSingleAccess(accessId) {
+  if (!selectedUserId) return;
+  shareSourceType     = 'user';
+  shareSingleAccessId = accessId;
+  _initShareModal(accessId);
+}
+
+function openShareGroupAccess(accessId) {
+  shareSourceType     = 'group';
+  shareSingleAccessId = accessId;
+  _initShareModalGroup(accessId);
+}
+
+function _initShareModal(preSelectedId, preSelectedIds) {
+  shareStep         = 1;
+  shareTargetId     = null;
+  shareTargetType   = 'user';
+  shareSelectedAccessIds = preSelectedIds ? [...preSelectedIds]
+                         : preSelectedId  ? [preSelectedId]
+                         : [];
+
+  const u = users.find(x => x.id === selectedUserId);
+  document.getElementById('shareModalSub').textContent =
+    `De: ${u ? u.name : '—'} → selecione os acessos e o destino`;
+
+  _renderShareStep();
+  document.getElementById('shareModal').classList.add('open');
+}
+
+function _initShareModalGroup(accessId, accessIds) {
+  shareStep       = 2;
+  shareTargetId   = null;
+  shareTargetType = 'user';
+  shareSelectedAccessIds = accessIds ? [...accessIds] : accessId ? [accessId] : [];
+
+  const g = groups.find(x => x.id === selectedGroupId);
+  document.getElementById('shareModalSub').textContent =
+    `De grupo: ${g ? g.name : '—'} → selecione o destino`;
+
+  _renderShareStep();
+  document.getElementById('shareModal').classList.add('open');
+}
+
+function _renderShareStep() {
+  // dots
+  [1,2,3].forEach(i => {
+    const dot = document.getElementById('sdot'+i);
+    dot.className = 'step-dot' + (i === shareStep ? ' active' : i < shareStep ? ' done' : '');
+  });
+  const labels = ['Selecionar acessos','Escolher destinatário','Concluído'];
+  document.getElementById('stepLabel').textContent = labels[shareStep-1];
+
+  // panels
+  document.querySelectorAll('.share-step').forEach(p => p.classList.remove('active'));
+  document.getElementById('shareStep'+shareStep).classList.add('active');
+
+  // actions
+  const actDiv = document.getElementById('shareModalActions');
+  if (shareStep === 3) {
+    actDiv.innerHTML = `<button class="btn btn-primary" onclick="closeModal('shareModal')">✓ Fechar</button>`;
+  } else {
+    actDiv.innerHTML = `
+      <button class="btn btn-ghost" onclick="${shareStep===1?"closeModal('shareModal')":'sharePrev()'}">
+        ${shareStep===1?'Cancelar':'← Voltar'}
+      </button>
+      <button class="btn btn-primary" id="shareNextBtn" onclick="shareNext()">
+        ${shareStep===2?'Compartilhar ✓':'Próximo →'}
+      </button>`;
+  }
+
+  if (shareStep === 1) _renderShareAccessList();
+  if (shareStep === 2) _renderShareUserList();
+}
+
+function _renderShareAccessList() {
+  const pool = shareSourceType === 'group'
+    ? groupAccesses.filter(a => a.groupId === selectedGroupId)
+    : accesses.filter(a => a.userId === selectedUserId);
+  const list = document.getElementById('shareAccessList');
+
+  if (pool.length === 0) {
+    list.innerHTML = `<div style="padding:20px;text-align:center;color:var(--text3);font-size:12px">Nenhum acesso disponível.</div>`;
+    return;
+  }
+
+  list.innerHTML = pool.map(a => {
+    const sel = shareSelectedAccessIds.includes(a.id);
+    return `
+    <div class="share-access-item ${sel?'selected':''}" onclick="toggleShareAccess('${a.id}',this)" id="sai-${a.id}">
+      <div class="share-check">${sel?'✓':''}</div>
+      <span class="share-access-icon">${typeIcons[a.type]}</span>
+      <div class="share-access-info">
+        <div class="share-access-name">${a.name}</div>
+        <div class="share-access-meta">${a.url||a.user||'—'}</div>
+      </div>
+      <span class="share-access-badge type-${a.type}">${typeLabels[a.type]}</span>
+    </div>`;
+  }).join('');
+
+  _updateShareCount();
+}
+
+function _renderShareUserList() {
+  const list = document.getElementById('shareUserList');
+  const otherUsers  = users.filter(u => u.id !== selectedUserId);
+  const otherGroups = groups;
+
+  let html = '';
+
+  if (otherGroups.length > 0) {
+    html += `<div class="share-dest-section-label">Grupos</div>`;
+    html += otherGroups.map(g => {
+      const sel = shareTargetId === g.id && shareTargetType === 'group';
+      return `
+      <div class="share-group-item ${sel?'selected':''}" onclick="selectShareTarget('${g.id}','group',this)">
+        <div class="share-check">${sel?'✓':''}</div>
+        <div class="share-group-icon">${g.icon||'🗂'}</div>
+        <div style="flex:1">
+          <div class="share-group-name">${g.name}</div>
+          <div class="share-group-meta">${(g.members||[]).length} membro(s) · ${groupAccesses.filter(a=>a.groupId===g.id).length} acesso(s)</div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  if (otherUsers.length > 0) {
+    html += `<div class="share-dest-section-label">Usuários</div>`;
+    html += otherUsers.map(u => {
+      const sel = shareTargetId === u.id && shareTargetType === 'user';
+      return `
+      <div class="share-user-item ${sel?'selected':''}" onclick="selectShareTarget('${u.id}','user',this)">
+        <div class="share-check">${sel?'✓':''}</div>
+        <div class="avatar" style="background:${u.color}20;color:${u.color};width:30px;height:30px;font-size:12px;flex-shrink:0">${initials(u.name)}</div>
+        <div style="flex:1">
+          <div class="share-user-name">${u.name}</div>
+          <div class="share-user-role">${u.role||'—'} · ${u.dept||'—'}</div>
+        </div>
+        <span style="font-size:10px;color:var(--text3)">${accesses.filter(a=>a.userId===u.id).length} acessos</span>
+      </div>`;
+    }).join('');
+  }
+
+  if (!html) {
+    html = `<div style="padding:20px;text-align:center;color:var(--text3);font-size:12px">Nenhum usuário ou grupo disponível.</div>`;
+  }
+
+  list.innerHTML = html;
+}
+
+function toggleShareAccess(id, el) {
+  if (shareSelectedAccessIds.includes(id)) {
+    shareSelectedAccessIds = shareSelectedAccessIds.filter(x=>x!==id);
+    el.classList.remove('selected');
+    el.querySelector('.share-check').textContent = '';
+  } else {
+    shareSelectedAccessIds.push(id);
+    el.classList.add('selected');
+    el.querySelector('.share-check').textContent = '✓';
+  }
+  _updateShareCount();
+}
+
+function selectShareTarget(id, type, el) {
+  shareTargetId   = id;
+  shareTargetType = type;
+  document.querySelectorAll('.share-user-item, .share-group-item').forEach(i => {
+    i.classList.remove('selected');
+    i.querySelector('.share-check').textContent = '';
+  });
+  el.classList.add('selected');
+  el.querySelector('.share-check').textContent = '✓';
+}
+
+function shareSelectAll() {
+  const pool = shareSourceType === 'group'
+    ? groupAccesses.filter(a => a.groupId === selectedGroupId)
+    : accesses.filter(a => a.userId === selectedUserId);
+  shareSelectedAccessIds = pool.map(a=>a.id);
+  _renderShareAccessList();
+}
+
+function _updateShareCount() {
+  const el = document.getElementById('shareSelectedCount');
+  if (el) el.textContent = `${shareSelectedAccessIds.length} selecionado(s)`;
+}
+
+function shareNext() {
+  if (shareStep === 1) {
+    if (shareSelectedAccessIds.length === 0) { toast('⚠️','Selecione pelo menos um acesso'); return; }
+    shareStep = 2;
+    _renderShareStep();
+  } else if (shareStep === 2) {
+    if (!shareTargetId) { toast('⚠️','Selecione um usuário ou grupo destino'); return; }
+    _doShare();
+  }
+}
+
+function sharePrev() {
+  if (shareStep > 1) { shareStep--; _renderShareStep(); }
+}
+
+function _doShare() {
+  // Determine source name
+  let srcName, toShareItems;
+  if (shareSourceType === 'group') {
+    const g = groups.find(x => x.id === selectedGroupId);
+    srcName      = g ? g.name : 'Grupo';
+    toShareItems = groupAccesses.filter(a => shareSelectedAccessIds.includes(a.id));
+  } else {
+    const u = users.find(x => x.id === selectedUserId);
+    srcName      = u ? u.name : '—';
+    toShareItems = accesses.filter(a => shareSelectedAccessIds.includes(a.id));
+  }
+
+  let destName;
+
+  if (shareTargetType === 'group') {
+    // → copy into groupAccesses
+    const dstGroup = groups.find(x => x.id === shareTargetId);
+    destName = dstGroup ? dstGroup.name : '—';
+    const newItems = toShareItems.map(a => ({
+      ...a,
+      id:         'ga_' + Date.now() + '_' + Math.random().toString(36).slice(2,6),
+      groupId:    shareTargetId,
+      sharedFrom: srcName,
+      createdAt:  new Date().toISOString(),
+      updatedAt:  undefined,
+      userId:     undefined
+    }));
+    groupAccesses.push(...newItems);
+  } else {
+    // → copy into accesses (user)
+    const dstUser = users.find(x => x.id === shareTargetId);
+    destName = dstUser ? dstUser.name : '—';
+    const newItems = toShareItems.map(a => ({
+      ...a,
+      id:         'a_' + Date.now() + '_' + Math.random().toString(36).slice(2,6),
+      userId:     shareTargetId,
+      sharedFrom: srcName,
+      createdAt:  new Date().toISOString(),
+      updatedAt:  undefined,
+      groupId:    undefined
+    }));
+    accesses.push(...newItems);
+  }
+
+  save();
+
+  const payload = { from: srcName, to: destName, ts: new Date().toISOString(), items: toShareItems };
+  const code    = btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
+  document.getElementById('exportCodeBox').textContent = code;
+  document.getElementById('shareSuccessMsg').textContent =
+    `${toShareItems.length} acesso(s) copiado(s) para ${destName} com sucesso.`;
+
+  shareStep = 3;
+  _renderShareStep();
+  renderUsers(); renderGroups();
+  if (selectedGroupId) { renderGroupDetail(); exitGroupSelectionMode(); }
+  if (selectedUserId)  renderDetail();
+  exitSelectionMode();
+  toast('↗', `${toShareItems.length} acesso(s) compartilhado(s) com ${destName}`);
+}
+
+function copyExportCode() {
+  const code = document.getElementById('exportCodeBox').textContent;
+  navigator.clipboard.writeText(code).then(()=>toast('⎘','Código copiado'));
+}
+
+// ——— IMPORT SYSTEM ———
+function openImportModal() {
+  if (!selectedUserId) { toast('⚠️','Selecione um usuário para importar os acessos'); return; }
+  document.getElementById('importCodeArea').value = '';
+  document.getElementById('importPreview').style.display = 'none';
+  openModal('importModal');
+}
+
+function previewImport() {
+  const raw = document.getElementById('importCodeArea').value.trim();
+  if (!raw) { toast('⚠️','Cole o código primeiro'); return; }
+  try {
+    const data = JSON.parse(decodeURIComponent(escape(atob(raw))));
+    const preview = document.getElementById('importPreviewContent');
+    preview.innerHTML = `
+      <div style="margin-bottom:6px;color:var(--text2)">De: <strong>${data.from||'—'}</strong> → Para: <strong>${data.to||'—'}</strong></div>
+      ${(data.items||[]).map(a=>`
+        <div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid var(--border)">
+          <span>${typeIcons[a.type]||'📦'}</span>
+          <span style="color:var(--text)">${a.name}</span>
+          <span style="color:var(--text3);font-size:10px">${a.url||''}</span>
+        </div>`).join('')}`;
+    document.getElementById('importPreview').style.display = 'block';
+    toast('👁','Pré-visualização carregada');
+  } catch(e) {
+    toast('⚠️','Código inválido ou corrompido');
+  }
+}
+
+function doImport() {
+  if (!selectedUserId) { toast('⚠️','Selecione um usuário destino'); return; }
+  const raw = document.getElementById('importCodeArea').value.trim();
+  if (!raw) { toast('⚠️','Cole o código de exportação'); return; }
+  try {
+    const data = JSON.parse(decodeURIComponent(escape(atob(raw))));
+    const items = data.items || [];
+    if (items.length === 0) { toast('⚠️','Nenhum acesso encontrado no código'); return; }
+
+    const newAccesses = items.map(a => ({
+      ...a,
+      id:          'a_' + Date.now() + '_' + Math.random().toString(36).slice(2,6),
+      userId:      selectedUserId,
+      sharedFrom:  data.from||'importado',
+      createdAt:   new Date().toISOString(),
+      updatedAt:   undefined
+    }));
+
+    accesses.push(...newAccesses);
+    save();
+    closeModal('importModal');
+    renderUsers(); renderGroups();
+    renderDetail();
+    toast('📥', `${items.length} acesso(s) importado(s) com sucesso`);
+  } catch(e) {
+    toast('⚠️','Código inválido ou corrompido');
+  }
+}
+
+// ——— TABS ———
+function switchTab(tabId, btn) {
+  document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById(tabId).classList.add('active');
+  btn.classList.add('active');
+}
+
+// ——— GROUPS CRUD ———
+let selectedGroupIcon     = '🗂';
+let selectedEditGroupIcon = '🗂';
+let addMemberSelected     = [];
+
+function selectGroupIcon(el) {
+  document.querySelectorAll('#groupIconPicker .icon-opt').forEach(o => o.classList.remove('selected'));
+  el.classList.add('selected');
+  selectedGroupIcon = el.dataset.icon;
+}
+
+function selectEditGroupIcon(el) {
+  document.querySelectorAll('#editGroupIconPicker .icon-opt').forEach(o => o.classList.remove('selected'));
+  el.classList.add('selected');
+  selectedEditGroupIcon = el.dataset.icon;
+}
+
+function buildMemberPicker(containerId, currentMembers) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  if (users.length === 0) {
+    container.innerHTML = `<div style="padding:14px;font-size:11px;color:var(--text3)">Nenhum usuário cadastrado ainda.</div>`;
+    return;
+  }
+  container.innerHTML = users.map(u => {
+    const isSel = currentMembers.includes(u.id);
+    return `
+    <div class="member-picker-item ${isSel?'selected':''}" data-uid="${u.id}" onclick="toggleMemberPick(this)">
+      <div class="member-picker-check">${isSel?'✓':''}</div>
+      <div class="member-avatar" style="background:${u.color}18;color:${u.color};width:28px;height:28px;font-size:11px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-family:'Syne',sans-serif;font-weight:700">${initials(u.name)}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px;color:var(--text)">${u.name}</div>
+        <div style="font-size:10px;color:var(--text3)">${u.role||u.dept||'—'}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function toggleMemberPick(el) {
+  el.classList.toggle('selected');
+  const check = el.querySelector('.member-picker-check');
+  const userId = el.dataset.uid;
+  if (el.classList.contains('selected')) {
+    check.textContent = '✓';
+    if (!addMemberSelected.includes(userId)) addMemberSelected.push(userId);
+  } else {
+    check.textContent = '';
+    addMemberSelected = addMemberSelected.filter(x => x !== userId);
+  }
+}
+
+// Override openModal for groupModal to populate pickers
+const _origOpenModal = openModal;
+openModal = function(id) {
+  if (id === 'groupModal') {
+    // reset
+    selectedGroupIcon = '🗂';
+    addMemberSelected = [];
+    document.querySelectorAll('#groupIconPicker .icon-opt').forEach(o => o.classList.toggle('selected', o.dataset.icon==='🗂'));
+    document.getElementById('gName').value = '';
+    document.getElementById('gDesc').value = '';
+    buildMemberPicker('groupMemberPicker', []);
+  }
+  _origOpenModal(id);
+};
+
+function saveGroup() {
+  const name = document.getElementById('gName').value.trim();
+  if (!name) { toast('⚠️', 'Informe o nome do grupo'); return; }
+
+  // Collect selected members from picker
+  const picked = [];
+  document.querySelectorAll('#groupMemberPicker .member-picker-item.selected').forEach(el => {
+    if (el.dataset.uid) picked.push(el.dataset.uid);
+  });
+
+  const g = {
+    id:        'g_' + Date.now(),
+    name,
+    desc:      document.getElementById('gDesc').value.trim(),
+    icon:      selectedGroupIcon,
+    members:   picked,
+    createdAt: new Date().toISOString()
+  };
+
+  groups.push(g);
+  save();
+  closeModal('groupModal');
+  renderGroups();
+  selectGroup(g.id);
+  toast('✓', `Grupo "${name}" criado`);
+}
+
+function openEditGroup(id) {
+  const g = groups.find(x => x.id === id);
+  if (!g) return;
+  selectedEditGroupIcon = g.icon || '🗂';
+  document.getElementById('egId').value   = g.id;
+  document.getElementById('egName').value = g.name;
+  document.getElementById('egDesc').value = g.desc || '';
+  document.querySelectorAll('#editGroupIconPicker .icon-opt').forEach(o => {
+    o.classList.toggle('selected', o.dataset.icon === selectedEditGroupIcon);
+  });
+  document.getElementById('editGroupModalSub').textContent = `Editando: ${g.name}`;
+  document.getElementById('editGroupModal').classList.add('open');
+}
+
+function saveEditGroup() {
+  const id   = document.getElementById('egId').value;
+  const name = document.getElementById('egName').value.trim();
+  if (!name) { toast('⚠️', 'Informe o nome do grupo'); return; }
+
+  const idx = groups.findIndex(x => x.id === id);
+  if (idx === -1) return;
+
+  groups[idx] = { ...groups[idx], name, desc: document.getElementById('egDesc').value.trim(), icon: selectedEditGroupIcon, updatedAt: new Date().toISOString() };
+  save();
+  closeModal('editGroupModal');
+  renderGroups();
+  renderGroupDetail();
+  toast('✏️', `Grupo "${name}" atualizado`);
+}
+
+function deleteGroup(id) {
+  const g = groups.find(x => x.id === id);
+  if (!confirm(`Remover o grupo "${g.name}" e todos os seus acessos?`)) return;
+  groups        = groups.filter(x => x.id !== id);
+  groupAccesses = groupAccesses.filter(a => a.groupId !== id);
+  save();
+  selectedGroupId = null;
+  renderGroups();
+  document.getElementById('headerTitle').textContent = 'Selecione um usuário';
+  document.getElementById('headerSub').textContent   = 'Gerencie credenciais e acessos';
+  document.getElementById('headerActions').innerHTML = '';
+  document.getElementById('mainContent').innerHTML = `
+    <div class="empty-state">
+      <div class="empty-icon">🔐</div>
+      <h2>Nenhum usuário selecionado</h2>
+      <p>Selecione um usuário na barra lateral ou crie um novo.</p>
+      <button class="btn btn-primary" onclick="openModal('userModal')">+ Criar usuário</button>
+    </div>`;
+  toast('🗑', `Grupo "${g.name}" removido`);
+}
+
+// ——— MEMBERS ———
+function openAddMember(groupId) {
+  const g = groups.find(x => x.id === groupId);
+  if (!g) return;
+  addMemberSelected = [...(g.members||[])];
+  document.getElementById('amGroupId').value = groupId;
+  document.getElementById('addMemberModalSub').textContent = `Adicionando membros a: ${g.name}`;
+  buildMemberPicker('addMemberList', g.members||[]);
+  document.getElementById('addMemberModal').classList.add('open');
+}
+
+function confirmAddMembers() {
+  const groupId = document.getElementById('amGroupId').value;
+  const idx = groups.findIndex(x => x.id === groupId);
+  if (idx === -1) return;
+
+  const picked = [];
+  document.querySelectorAll('#addMemberList .member-picker-item.selected').forEach(el => {
+    if (el.dataset.uid) picked.push(el.dataset.uid);
+  });
+
+  groups[idx].members = picked;
+  save();
+  closeModal('addMemberModal');
+  renderGroups();
+  renderGroupDetail();
+  toast('👥', `Membros atualizados`);
+}
+
+function removeMember(groupId, userId) {
+  const idx = groups.findIndex(x => x.id === groupId);
+  if (idx === -1) return;
+  groups[idx].members = (groups[idx].members||[]).filter(m => m !== userId);
+  save();
+  renderGroups();
+  renderGroupDetail();
+  toast('✕', 'Membro removido do grupo');
+}
+
+// ——— GROUP ACCESSES ———
+function openGroupAccessModal(groupId) {
+  document.getElementById('gaGroupId').value = groupId;
+  const g = groups.find(x => x.id === groupId);
+  document.getElementById('groupAccessModalSub').textContent = `Acesso compartilhado para: ${g.name}`;
+  ['gaName','gaUrl','gaUser','gaPass','gaNotes'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('gaType').value = 'web';
+  document.getElementById('groupAccessModal').classList.add('open');
+}
+
+function saveGroupAccess() {
+  const groupId = document.getElementById('gaGroupId').value;
+  const name    = document.getElementById('gaName').value.trim();
+  if (!name) { toast('⚠️', 'Informe o nome do acesso'); return; }
+
+  const a = {
+    id:        'ga_' + Date.now(),
+    groupId,
+    type:      document.getElementById('gaType').value,
+    name,
+    url:       document.getElementById('gaUrl').value.trim(),
+    user:      document.getElementById('gaUser').value.trim(),
+    pass:      document.getElementById('gaPass').value,
+    notes:     document.getElementById('gaNotes').value.trim(),
+    createdAt: new Date().toISOString()
+  };
+
+  groupAccesses.push(a);
+  save();
+  closeModal('groupAccessModal');
+  renderGroups();
+  renderGroupDetail();
+  toast('✓', `Acesso "${name}" adicionado ao grupo`);
+}
+
+function openEditGroupAccess(id) {
+  const a = groupAccesses.find(x => x.id === id);
+  if (!a) return;
+  document.getElementById('egaId').value    = a.id;
+  document.getElementById('egaType').value  = a.type;
+  document.getElementById('egaName').value  = a.name;
+  document.getElementById('egaUrl').value   = a.url   || '';
+  document.getElementById('egaUser').value  = a.user  || '';
+  document.getElementById('egaPass').value  = a.pass  || '';
+  document.getElementById('egaNotes').value = a.notes || '';
+  document.getElementById('editGroupAccessModalSub').textContent = `Editando: ${a.name}`;
+  document.getElementById('editGroupAccessModal').classList.add('open');
+}
+
+function saveEditGroupAccess() {
+  const id   = document.getElementById('egaId').value;
+  const name = document.getElementById('egaName').value.trim();
+  if (!name) { toast('⚠️', 'Informe o nome do acesso'); return; }
+
+  const idx = groupAccesses.findIndex(x => x.id === id);
+  if (idx === -1) return;
+
+  groupAccesses[idx] = {
+    ...groupAccesses[idx],
+    type:      document.getElementById('egaType').value,
+    name,
+    url:       document.getElementById('egaUrl').value.trim(),
+    user:      document.getElementById('egaUser').value.trim(),
+    pass:      document.getElementById('egaPass').value,
+    notes:     document.getElementById('egaNotes').value.trim(),
+    updatedAt: new Date().toISOString()
+  };
+
+  save();
+  closeModal('editGroupAccessModal');
+  renderGroups();
+  renderGroupDetail();
+  toast('✏️', `Acesso "${name}" atualizado`);
+}
+
+function deleteGroupAccess(id) {
+  const a = groupAccesses.find(x => x.id === id);
+  if (!confirm(`Remover o acesso "${a.name}" do grupo?`)) return;
+  groupAccesses = groupAccesses.filter(x => x.id !== id);
+  save();
+  renderGroups();
+  renderGroupDetail();
+  toast('🗑', `Acesso "${a.name}" removido`);
+}
+
+// ——— OPEN EDIT USER ———
+let selectedEditColor = '#00e5ff';
+
+function openEditUser(id) {
+  const u = users.find(x => x.id === id);
+  if (!u) return;
+
+  document.getElementById('euId').value    = u.id;
+  document.getElementById('euName').value  = u.name;
+  document.getElementById('euEmail').value = u.email || '';
+  document.getElementById('euRole').value  = u.role  || '';
+  document.getElementById('euDept').value  = u.dept  || '';
+  document.getElementById('editUserModalSub').textContent = `Editando: ${u.name}`;
+
+  // Cor do avatar
+  selectedEditColor = u.color || '#00e5ff';
+  document.querySelectorAll('#editColorPicker .color-opt').forEach(el => {
+    el.classList.toggle('selected', el.dataset.color === selectedEditColor);
+  });
+
+  document.getElementById('editUserModal').classList.add('open');
+}
+
+function selectEditColor(el) {
+  document.querySelectorAll('#editColorPicker .color-opt').forEach(o => o.classList.remove('selected'));
+  el.classList.add('selected');
+  selectedEditColor = el.dataset.color;
+}
+
+function saveEditUser() {
+  const id   = document.getElementById('euId').value;
+  const name = document.getElementById('euName').value.trim();
+  if (!name) { toast('⚠️', 'Informe o nome do usuário'); return; }
+
+  const idx = users.findIndex(x => x.id === id);
+  if (idx === -1) return;
+
+  users[idx] = {
+    ...users[idx],
+    name,
+    email: document.getElementById('euEmail').value.trim(),
+    role:  document.getElementById('euRole').value.trim(),
+    dept:  document.getElementById('euDept').value.trim(),
+    color: selectedEditColor,
+    updatedAt: new Date().toISOString()
+  };
+
+  save();
+  closeModal('editUserModal');
+  renderUsers(); renderGroups();
+  renderDetail();
+  toast('✏️', `Usuário "${name}" atualizado`);
+}
+
+// ——— OPEN EDIT ACCESS ———
+function openEditAccess(id) {
+  const a = accesses.find(x=>x.id===id);
+  if (!a) return;
+  document.getElementById('eAccessId').value = a.id;
+  document.getElementById('eType').value = a.type;
+  document.getElementById('eName').value = a.name;
+  document.getElementById('eUrl').value = a.url||'';
+  document.getElementById('eUser').value = a.user||'';
+  document.getElementById('ePass').value = a.pass||'';
+  document.getElementById('eNotes').value = a.notes||'';
+  document.getElementById('eObservations').value = a.observations||'';
+  document.getElementById('editAccessModalSub').textContent = `Editando: ${a.name}`;
+  document.getElementById('editAccessModal').classList.add('open');
+}
+
+// ——— SAVE EDIT ACCESS ———
+function saveEditAccess() {
+  const id = document.getElementById('eAccessId').value;
+  const name = document.getElementById('eName').value.trim();
+  if (!name) { toast('⚠️', 'Informe o nome do acesso'); return; }
+
+  const idx = accesses.findIndex(x=>x.id===id);
+  if (idx === -1) return;
+
+  accesses[idx] = {
+    ...accesses[idx],
+    type:         document.getElementById('eType').value,
+    name,
+    url:          document.getElementById('eUrl').value.trim(),
+    user:         document.getElementById('eUser').value.trim(),
+    pass:         document.getElementById('ePass').value,
+    notes:        document.getElementById('eNotes').value.trim(),
+    observations: document.getElementById('eObservations').value.trim(),
+    updatedAt:    new Date().toISOString()
+  };
+
+  save();
+  closeModal('editAccessModal');
+  renderUsers(); renderGroups();
+  renderDetail();
+  toast('✏️', `Acesso "${name}" atualizado`);
+}
+
+// ——— SAVE USER OBSERVATIONS ———
+function saveUserObs(userId) {
+  const idx = users.findIndex(x=>x.id===userId);
+  if (idx === -1) return;
+  users[idx].observations = document.getElementById('userObsArea').value;
+  save();
+  toast('💾', 'Observações salvas');
+}
+
+// ——— MODALS ———
+function openModal(id) {
+  if (id === 'accessModal' && selectedUserId) {
+    const u = users.find(x=>x.id===selectedUserId);
+    document.getElementById('accessModalSub').textContent = `Adicionando acesso para ${u.name}`;
+  }
+  document.getElementById(id).classList.add('open');
+}
+
+function closeModal(id) {
+  document.getElementById(id).classList.remove('open');
+}
+
+document.querySelectorAll('.overlay').forEach(el => {
+  el.addEventListener('click', e => { if(e.target===el) el.classList.remove('open'); });
+});
+
+// ESC to close modals
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') document.querySelectorAll('.overlay.open').forEach(el=>el.classList.remove('open'));
+});
+
+// ——— COLOR PICKER ———
+function selectColor(el) {
+  document.querySelectorAll('.color-opt').forEach(o=>o.classList.remove('selected'));
+  el.classList.add('selected');
+  selectedColor = el.dataset.color;
+}
+
+// ——— SAVE USER ———
+function saveUser() {
+  const name = document.getElementById('uName').value.trim();
+  if (!name) { toast('⚠️', 'Informe o nome do usuário'); return; }
+
+  const u = {
+    id: 'u_' + Date.now(),
+    name,
+    email: document.getElementById('uEmail').value.trim(),
+    role:  document.getElementById('uRole').value.trim(),
+    dept:  document.getElementById('uDept').value.trim(),
+    color: selectedColor,
+    createdAt: new Date().toISOString()
+  };
+
+  users.push(u);
+  save();
+
+  document.getElementById('uName').value = '';
+  document.getElementById('uEmail').value = '';
+  document.getElementById('uRole').value = '';
+  document.getElementById('uDept').value = '';
+  closeModal('userModal');
+  renderUsers(); renderGroups();
+  selectUser(u.id);
+  toast('✓', `Usuário "${name}" criado`);
+}
+
+// ——— SAVE ACCESS ———
+function saveAccess() {
+  if (!selectedUserId) return;
+  const name = document.getElementById('aName').value.trim();
+  if (!name) { toast('⚠️', 'Informe o nome do acesso'); return; }
+
+  const a = {
+    id: 'a_' + Date.now(),
+    userId: selectedUserId,
+    type:  document.getElementById('aType').value,
+    name,
+    url:   document.getElementById('aUrl').value.trim(),
+    user:  document.getElementById('aUser').value.trim(),
+    pass:  document.getElementById('aPass').value,
+    notes: document.getElementById('aNotes').value.trim(),
+    createdAt: new Date().toISOString()
+  };
+
+  accesses.push(a);
+  save();
+
+  ['aName','aUrl','aUser','aPass','aNotes'].forEach(id => document.getElementById(id).value='');
+  document.getElementById('aType').value='web';
+  closeModal('accessModal');
+  renderUsers(); renderGroups();
+  renderDetail();
+  toast('✓', `Acesso "${name}" adicionado`);
+}
+
+// ——— DELETE ———
+function deleteUser(id) {
+  const u = users.find(x=>x.id===id);
+  if (!confirm(`Remover o usuário "${u.name}" e todos os seus acessos?`)) return;
+  accesses = accesses.filter(a=>a.userId!==id);
+  users = users.filter(x=>x.id!==id);
+  save();
+  selectedUserId = null;
+  renderUsers(); renderGroups();
+  document.getElementById('headerTitle').textContent = 'Selecione um usuário';
+  document.getElementById('headerSub').textContent = 'Gerencie credenciais e acessos';
+  document.getElementById('headerActions').innerHTML = '';
+  document.getElementById('mainContent').innerHTML = `
+    <div class="empty-state">
+      <div class="empty-icon">🔐</div>
+      <h2>Nenhum usuário selecionado</h2>
+      <p>Selecione um usuário na barra lateral ou crie um novo.</p>
+      <button class="btn btn-primary" onclick="openModal('userModal')">+ Criar usuário</button>
+    </div>`;
+  toast('🗑', `Usuário "${u.name}" removido`);
+}
+
+function deleteAccess(id) {
+  const a = accesses.find(x=>x.id===id);
+  if (!confirm(`Remover o acesso "${a.name}"?`)) return;
+  accesses = accesses.filter(x=>x.id!==id);
+  save();
+  renderUsers(); renderGroups();
+  renderDetail();
+  toast('🗑', `Acesso "${a.name}" removido`);
+}
+
+// ——— UTILS ———
+function togglePass(id, val) {
+  const el = document.getElementById('pass-'+id);
+  el.textContent = el.textContent === '••••••••' ? val : '••••••••';
+}
+
+function copyText(val, label) {
+  navigator.clipboard.writeText(val).then(()=>toast('⎘', `${label} copiado`));
+}
+
+let toastTimer;
+function toast(icon, msg) {
+  const el = document.getElementById('toast');
+  document.getElementById('toastIcon').textContent = icon;
+  document.getElementById('toastMsg').textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>el.classList.remove('show'), 2500);
+}
+
+// ——— EDITOR EXPORT ———
+function openEditorExportModal() {
+  document.getElementById('editorExportCode').textContent = 'Clique em "Gerar código" para exportar.';
+  document.getElementById('copyEditorExportBtn').style.display = 'none';
+  document.getElementById('editorExportModal').classList.add('open');
+}
+
+function generateEditorExport() {
+  const payload = {
+    type: 'av_sync',
+    exportedAt: new Date().toISOString(),
+    users, accesses, groups, groupAccesses
+  };
+  try {
+    const json    = JSON.stringify(payload);
+    const bytes   = new TextEncoder().encode(json);
+    const binStr  = Array.from(bytes, b => String.fromCharCode(b)).join('');
+    const encoded = btoa(binStr);
+    document.getElementById('editorExportCode').textContent = encoded;
+    document.getElementById('copyEditorExportBtn').style.display = 'inline-flex';
+    toast('📤', 'Código gerado — copie e envie ao dono');
+  } catch(e) {
+    toast('⚠️', 'Erro ao gerar código');
+  }
+}
+
+function copyEditorExport() {
+  navigator.clipboard.writeText(document.getElementById('editorExportCode').textContent)
+    .then(() => toast('⎘', 'Código copiado!'));
+}
+
+// ——— SYNC (owner side) ———
+function _decodeSyncPayload(raw) {
+  const binStr = atob(raw.trim());
+  const bytes  = Uint8Array.from(binStr, c => c.charCodeAt(0));
+  const json   = new TextDecoder().decode(bytes);
+  return JSON.parse(json);
+}
+
+function _computeMerge(payload) {
+  const result = { newUsers:[], updUsers:[], newAccesses:[], updAccesses:[], newGroups:[], updGroups:[], newGroupAccesses:[], updGroupAccesses:[] };
+
+  // Users
+  (payload.users||[]).forEach(eu => {
+    const mine = users.find(u => u.id === eu.id);
+    if (!mine) result.newUsers.push(eu);
+    else if (eu.updatedAt && eu.updatedAt > (mine.updatedAt||mine.createdAt||'')) result.updUsers.push(eu);
+  });
+
+  // Accesses
+  (payload.accesses||[]).forEach(ea => {
+    const mine = accesses.find(a => a.id === ea.id);
+    if (!mine) result.newAccesses.push(ea);
+    else if (ea.updatedAt && ea.updatedAt > (mine.updatedAt||mine.createdAt||'')) result.updAccesses.push(ea);
+  });
+
+  // Groups
+  (payload.groups||[]).forEach(eg => {
+    const mine = groups.find(g => g.id === eg.id);
+    if (!mine) result.newGroups.push(eg);
+    else if (eg.updatedAt && eg.updatedAt > (mine.updatedAt||mine.createdAt||'')) result.updGroups.push(eg);
+  });
+
+  // Group accesses
+  (payload.groupAccesses||[]).forEach(ea => {
+    const mine = groupAccesses.find(a => a.id === ea.id);
+    if (!mine) result.newGroupAccesses.push(ea);
+    else if (ea.updatedAt && ea.updatedAt > (mine.updatedAt||mine.createdAt||'')) result.updGroupAccesses.push(ea);
+  });
+
+  return result;
+}
+
+function previewSync() {
+  const raw = document.getElementById('syncCodeArea').value.trim();
+  const preview = document.getElementById('syncPreview');
+  if (!raw) { preview.classList.remove('show'); return; }
+
+  try {
+    const payload = _decodeSyncPayload(raw);
+    if (payload.type !== 'av_sync') { preview.classList.remove('show'); return; }
+
+    const m = _computeMerge(payload);
+    const totalNew = m.newUsers.length + m.newAccesses.length + m.newGroups.length + m.newGroupAccesses.length;
+    const totalUpd = m.updUsers.length + m.updAccesses.length + m.updGroups.length + m.updGroupAccesses.length;
+    const totalSame = (payload.users||[]).length + (payload.accesses||[]).length + (payload.groups||[]).length + (payload.groupAccesses||[]).length - totalNew - totalUpd;
+
+    document.getElementById('syncPreviewStats').innerHTML = `
+      <span class="sync-stat sync-stat-new">✚ ${totalNew} novo${totalNew!==1?'s':''}</span>
+      <span class="sync-stat sync-stat-update">↑ ${totalUpd} atualizado${totalUpd!==1?'s':''}</span>
+      <span class="sync-stat sync-stat-same">= ${Math.max(0,totalSame)} sem alteração</span>
+    `;
+
+    const lines = [];
+    const exportDate = payload.exportedAt ? new Date(payload.exportedAt).toLocaleString('pt-BR') : '—';
+    lines.push(`<div style="color:var(--text3);margin-bottom:6px">Exportado em: ${exportDate}</div>`);
+    if (m.newUsers.length)         lines.push(`<div>👤 ${m.newUsers.length} usuário(s) novo(s): ${m.newUsers.map(u=>u.name).join(', ')}</div>`);
+    if (m.updUsers.length)         lines.push(`<div>✏️ ${m.updUsers.length} usuário(s) atualizado(s): ${m.updUsers.map(u=>u.name).join(', ')}</div>`);
+    if (m.newGroups.length)        lines.push(`<div>🗂 ${m.newGroups.length} grupo(s) novo(s): ${m.newGroups.map(g=>g.name).join(', ')}</div>`);
+    if (m.updGroups.length)        lines.push(`<div>✏️ ${m.updGroups.length} grupo(s) atualizado(s): ${m.updGroups.map(g=>g.name).join(', ')}</div>`);
+    if (m.newAccesses.length)      lines.push(`<div>🔑 ${m.newAccesses.length} acesso(s) novo(s) de usuário</div>`);
+    if (m.updAccesses.length)      lines.push(`<div>✏️ ${m.updAccesses.length} acesso(s) de usuário atualizado(s)</div>`);
+    if (m.newGroupAccesses.length) lines.push(`<div>🔑 ${m.newGroupAccesses.length} acesso(s) novo(s) de grupo</div>`);
+    if (m.updGroupAccesses.length) lines.push(`<div>✏️ ${m.updGroupAccesses.length} acesso(s) de grupo atualizado(s)</div>`);
+    if (!lines.length)             lines.push(`<div style="color:var(--text3)">Nenhuma diferença encontrada em relação aos seus dados atuais.</div>`);
+
+    document.getElementById('syncPreviewDetails').innerHTML = lines.join('');
+    preview.classList.add('show');
+  } catch(e) {
+    preview.classList.remove('show');
+  }
+}
+
+function doSync() {
+  const raw = document.getElementById('syncCodeArea').value.trim();
+  if (!raw) { setSyncMsg('error', 'Cole o código do editor primeiro.'); return; }
+
+  try {
+    const payload = _decodeSyncPayload(raw);
+    if (payload.type !== 'av_sync') { setSyncMsg('error', 'Código inválido — não parece ser um export do AccessVault.'); return; }
+
+    const m = _computeMerge(payload);
+    const totalNew = m.newUsers.length + m.newAccesses.length + m.newGroups.length + m.newGroupAccesses.length;
+    const totalUpd = m.updUsers.length + m.updAccesses.length + m.updGroups.length + m.updGroupAccesses.length;
+
+    if (totalNew + totalUpd === 0) { setSyncMsg('success', 'Nenhuma alteração para mesclar — dados já estão sincronizados.'); return; }
+
+    // Apply merge
+    m.newUsers.forEach(u => users.push(u));
+    m.updUsers.forEach(eu => { const i = users.findIndex(u => u.id === eu.id); if (i!==-1) users[i] = eu; });
+
+    m.newAccesses.forEach(a => accesses.push(a));
+    m.updAccesses.forEach(ea => { const i = accesses.findIndex(a => a.id === ea.id); if (i!==-1) accesses[i] = ea; });
+
+    m.newGroups.forEach(g => groups.push(g));
+    m.updGroups.forEach(eg => { const i = groups.findIndex(g => g.id === eg.id); if (i!==-1) groups[i] = eg; });
+
+    m.newGroupAccesses.forEach(a => groupAccesses.push(a));
+    m.updGroupAccesses.forEach(ea => { const i = groupAccesses.findIndex(a => a.id === ea.id); if (i!==-1) groupAccesses[i] = ea; });
+
+    save();
+    renderUsers(); renderGroups();
+
+    document.getElementById('syncCodeArea').value = '';
+    document.getElementById('syncPreview').classList.remove('show');
+    setSyncMsg('success', `✓ Mesclagem concluída — ${totalNew} novo(s) e ${totalUpd} atualizado(s).`);
+    toast('🔄', `Sincronização concluída: ${totalNew + totalUpd} alteração(ões)`);
+  } catch(e) {
+    setSyncMsg('error', 'Código inválido ou corrompido.');
+  }
+}
+
+function setSyncMsg(type, text) {
+  const el = document.getElementById('syncMsg');
+  if (!el) return;
+  el.className = 'settings-msg ' + type;
+  el.textContent = text;
+  if (type === 'success') setTimeout(() => { if(el) el.className = 'settings-msg'; }, 4000);
+}
+
+// ——— SHARE PROJECT (readonly + editor links) ———
+let _readonlyMode         = false;
+let _pendingEditorPayload = null;
+
+async function _hashPass(pass) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pass));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
+}
+
+function openShareProjectModal() {
+  ['shareLinkView','shareLinkEditor'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = id === 'shareLinkEditor'
+      ? 'Defina uma senha e clique em "Gerar link".'
+      : 'Clique em "Gerar link" para criar.';
+  });
+  document.getElementById('copyShareLinkView').style.display   = 'none';
+  document.getElementById('copyShareLinkEditor').style.display = 'none';
+  const p = document.getElementById('editorSharePass');
+  if (p) p.value = '';
+  document.getElementById('shareProjectModal').classList.add('open');
+}
+
+function switchSpmTab(tab, el) {
+  document.querySelectorAll('.spm-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.spm-panel').forEach(p => p.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('spm-' + tab).classList.add('active');
+}
+
+function _buildShareUrl(mode, passHash) {
+  const payload = { users, accesses, groups, groupAccesses, mode, passHash: passHash||null, exportedAt: new Date().toISOString() };
+  const json    = JSON.stringify(payload);
+  const bytes   = new TextEncoder().encode(json);
+  const binStr  = Array.from(bytes, b => String.fromCharCode(b)).join('');
+  const encoded = btoa(binStr);
+  return `${location.href.split('?')[0]}?share=${encodeURIComponent(encoded)}`;
+}
+
+async function generateShareLink(mode) {
+  try {
+    let passHash = null;
+    if (mode === 'editor') {
+      const pass = document.getElementById('editorSharePass').value;
+      if (!pass) { toast('⚠️', 'Defina uma senha para o link de editor'); return; }
+      passHash = await _hashPass(pass);
+    }
+    const url = _buildShareUrl(mode, passHash);
+    if (mode === 'view') {
+      document.getElementById('shareLinkView').textContent = url;
+      document.getElementById('copyShareLinkView').style.display = 'inline-flex';
+      toast('🔗', 'Link de visualização gerado!');
+    } else {
+      document.getElementById('shareLinkEditor').textContent = url;
+      document.getElementById('copyShareLinkEditor').style.display = 'inline-flex';
+      toast('🔗', 'Link de editor gerado!');
+    }
+  } catch(e) { toast('⚠️', 'Erro ao gerar link'); }
+}
+
+function copyLinkView()   { navigator.clipboard.writeText(document.getElementById('shareLinkView').textContent).then(()=>toast('⎘','Link copiado!')); }
+function copyLinkEditor() { navigator.clipboard.writeText(document.getElementById('shareLinkEditor').textContent).then(()=>toast('⎘','Link copiado!')); }
+function copyShareLink()  { copyLinkView(); }
+
+function doEditorAuth() {
+  const input = document.getElementById('editorAuthInput');
+  const err   = document.getElementById('editorAuthError');
+  _hashPass(input.value).then(hash => {
+    if (_pendingEditorPayload && hash === _pendingEditorPayload.passHash) {
+      err.classList.remove('show');
+      const screen = document.getElementById('editorAuthScreen');
+      screen.classList.add('hidden');
+      setTimeout(() => { screen.style.display = 'none'; }, 400);
+      _activateEditorMode(_pendingEditorPayload);
+    } else {
+      err.classList.add('show');
+      input.value = '';
+      input.focus();
+    }
+  });
+}
+
+function _activateEditorMode(payload) {
+  const banner = document.createElement('div');
+  banner.className = 'readonly-banner mode-editor';
+  banner.innerHTML = `
+    <span class="readonly-banner-icon">✏️</span>
+    <span>Modo editor — suas alterações ficam salvas no seu navegador</span>
+    ${payload.exportedAt ? `<span style="opacity:.6;font-weight:400">· dados de ${new Date(payload.exportedAt).toLocaleDateString('pt-BR')}</span>` : ''}
+  `;
+  document.body.prepend(banner);
+  document.body.classList.add('editor-mode');
+}
+
+function _enterReadonlyMode(payload) {
+  const mode = payload.mode || 'view';
+  users         = payload.users         || [];
+  accesses      = payload.accesses      || [];
+  groups        = payload.groups        || [];
+  groupAccesses = payload.groupAccesses || [];
+  document.getElementById('loginScreen').style.display = 'none';
+
+  if (mode === 'view') {
+    save = function() {};
+    _readonlyMode = true;
+    const banner = document.createElement('div');
+    banner.className = 'readonly-banner mode-view';
+    banner.innerHTML = `
+      <span class="readonly-banner-icon">👁</span>
+      <span>Modo somente leitura — você está visualizando dados compartilhados</span>
+      ${payload.exportedAt ? `<span style="opacity:.6;font-weight:400">· exportado em ${new Date(payload.exportedAt).toLocaleDateString('pt-BR')}</span>` : ''}
+    `;
+    document.body.prepend(banner);
+    document.body.classList.add('readonly-mode');
+
+  } else if (mode === 'editor') {
+    if (payload.passHash) {
+      _pendingEditorPayload = payload;
+      const screen = document.getElementById('editorAuthScreen');
+      screen.style.display = 'flex';
+      setTimeout(() => document.getElementById('editorAuthInput').focus(), 100);
+    } else {
+      _activateEditorMode(payload);
+    }
+  }
+}
+
+function _checkShareParam() {
+  const params = new URLSearchParams(location.search);
+  const share  = params.get('share');
+  if (!share) return false;
+  try {
+    const binStr  = atob(share);
+    const bytes   = Uint8Array.from(binStr, c => c.charCodeAt(0));
+    const json    = new TextDecoder().decode(bytes);
+    const payload = JSON.parse(json);
+    _enterReadonlyMode(payload);
+    return true;
+  } catch(e) {
+    console.warn('AccessVault: link inválido.', e);
+    return false;
+  }
+}
+
+// ——— AUTH ———
+const AUTH_KEY    = 'av_auth';
+const SESSION_KEY = 'av_session';
+
+// Carrega credenciais salvas ou usa padrão
+function loadAuth() {
+  const saved = localStorage.getItem(AUTH_KEY);
+  if (saved) {
+    try { return JSON.parse(saved); } catch(e) {}
+  }
+  return { user: 'admin', pass: 'accessvault2024' };
+}
+
+function saveAuth(obj) {
+  localStorage.setItem(AUTH_KEY, JSON.stringify(obj));
+}
+
+function checkSession() {
+  return sessionStorage.getItem(SESSION_KEY) === 'ok';
+}
+
+function doLogin() {
+  const u   = document.getElementById('loginUser').value.trim();
+  const p   = document.getElementById('loginPass').value;
+  const err = document.getElementById('loginError');
+  const auth = loadAuth();
+
+  if (u === auth.user && p === auth.pass) {
+    sessionStorage.setItem(SESSION_KEY, 'ok');
+    err.classList.remove('show');
+    document.getElementById('loginScreen').classList.add('hidden');
+  } else {
+    err.classList.add('show');
+    document.getElementById('loginPass').value = '';
+    document.getElementById('loginPass').focus();
+  }
+}
+
+function toggleLoginPass() {
+  const inp = document.getElementById('loginPass');
+  inp.type = inp.type === 'password' ? 'text' : 'password';
+}
+
+// ——— SETTINGS PAGE ———
+function openSettings() {
+  // Deselect user and group items
+  document.querySelectorAll('.user-item').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.group-item').forEach(el => el.classList.remove('active'));
+  document.getElementById('settingsNavBtn').classList.add('active');
+  selectedGroupId = null;
+  selectedUserId  = null;
+
+  const auth = loadAuth();
+  document.getElementById('headerTitle').textContent = 'Configurações';
+  document.getElementById('headerSub').textContent   = 'Gerencie preferências e segurança';
+  document.getElementById('headerActions').innerHTML = '';
+
+  document.getElementById('mainContent').innerHTML = `
+    <div class="settings-page">
+
+      <!-- Segurança -->
+      <div class="settings-section">
+        <div class="settings-section-title">🔒 Segurança</div>
+        <div class="settings-section-sub">Altere as credenciais de acesso à plataforma.</div>
+
+        <div id="settingsMsg" class="settings-msg"></div>
+
+        <div class="settings-field">
+          <label class="form-label">Usuário atual</label>
+          <div class="settings-input-wrap">
+            <input class="form-input" type="text" id="cfgUser" value="${escHtml(auth.user)}" placeholder="Novo usuário">
+          </div>
+        </div>
+
+        <div class="settings-field">
+          <label class="form-label">Senha atual</label>
+          <div class="settings-input-wrap">
+            <input class="form-input" type="password" id="cfgCurrent" placeholder="Digite a senha atual">
+            <button class="settings-toggle-pass" onclick="toggleSettingsPass('cfgCurrent')">👁</button>
+          </div>
+        </div>
+
+        <div class="settings-field">
+          <label class="form-label">Nova senha</label>
+          <div class="settings-input-wrap">
+            <input class="form-input" type="password" id="cfgNew" placeholder="Nova senha (mín. 6 caracteres)">
+            <button class="settings-toggle-pass" onclick="toggleSettingsPass('cfgNew')">👁</button>
+          </div>
+        </div>
+
+        <div class="settings-field">
+          <label class="form-label">Confirmar nova senha</label>
+          <div class="settings-input-wrap">
+            <input class="form-input" type="password" id="cfgConfirm" placeholder="Repita a nova senha">
+            <button class="settings-toggle-pass" onclick="toggleSettingsPass('cfgConfirm')">👁</button>
+          </div>
+        </div>
+
+        <div class="modal-actions" style="justify-content:flex-start; margin-top:20px;">
+          <button class="btn btn-primary" onclick="saveCredentials()">💾 Salvar alterações</button>
+        </div>
+      </div>
+
+      <!-- Informações -->
+      <div class="settings-section">
+        <div class="settings-section-title">ℹ️ Informações</div>
+        <div class="settings-section-sub" style="margin-bottom:0; padding-bottom:16px;">Dados sobre esta instalação.</div>
+        <div class="settings-info-row">
+          <span class="settings-info-label">Usuário de acesso</span>
+          <span class="settings-info-value" id="infoUser">${escHtml(auth.user)}</span>
+        </div>
+        <div class="settings-info-row">
+          <span class="settings-info-label">Usuários cadastrados</span>
+          <span class="settings-info-value">${users.length}</span>
+        </div>
+        <div class="settings-info-row">
+          <span class="settings-info-label">Acessos armazenados</span>
+          <span class="settings-info-value">${accesses.length}</span>
+        </div>
+        <div class="settings-info-row">
+          <span class="settings-info-label">Armazenamento</span>
+          <span class="settings-info-value">localStorage (local)</span>
+        </div>
+      </div>
+
+      <!-- Sincronização -->
+      <div class="settings-section">
+        <div class="settings-section-title">🔄 Sincronização</div>
+        <div class="settings-section-sub">Importe alterações enviadas por um editor convidado.</div>
+
+        <div id="syncMsg" class="settings-msg"></div>
+
+        <div class="settings-field">
+          <label class="form-label">Código do editor</label>
+          <textarea class="sync-code-area" id="syncCodeArea" placeholder="Cole aqui o código de exportação enviado pelo editor..." oninput="previewSync()"></textarea>
+        </div>
+
+        <div class="sync-preview" id="syncPreview">
+          <div class="sync-preview-title">📊 O que será mesclado:</div>
+          <div id="syncPreviewStats"></div>
+          <div id="syncPreviewDetails" style="margin-top:10px;font-size:11px;color:var(--text2);line-height:1.8"></div>
+        </div>
+
+        <div class="modal-actions" style="justify-content:flex-start;margin-top:16px;gap:8px">
+          <button class="btn btn-primary" style="background:var(--accent3);color:#000" onclick="doSync()">🔄 Mesclar alterações</button>
+        </div>
+      </div>
+
+      <!-- Sessão -->
+      <div class="settings-section">
+        <div class="settings-section-title">🚪 Sessão</div>
+        <div class="settings-section-sub" style="margin-bottom:16px; padding-bottom:16px;">Encerre a sessão atual. Será necessário fazer login novamente.</div>
+        <button class="logout-btn" onclick="doLogout()">🚪 Encerrar sessão</button>
+      </div>
+
+    </div>`;
+
+  selectedUserId = null;
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function toggleSettingsPass(id) {
+  const el = document.getElementById(id);
+  if (el) el.type = el.type === 'password' ? 'text' : 'password';
+}
+
+function setSettingsMsg(type, text) {
+  const el = document.getElementById('settingsMsg');
+  if (!el) return;
+  el.className = 'settings-msg ' + type;
+  el.textContent = text;
+  if (type === 'success') setTimeout(() => { el.className = 'settings-msg'; }, 3500);
+}
+
+function saveCredentials() {
+  const auth    = loadAuth();
+  const newUser = document.getElementById('cfgUser').value.trim();
+  const current = document.getElementById('cfgCurrent').value;
+  const newPass = document.getElementById('cfgNew').value;
+  const confirm = document.getElementById('cfgConfirm').value;
+
+  if (!newUser)              { setSettingsMsg('error', 'O campo de usuário não pode estar vazio.'); return; }
+  if (current !== auth.pass) { setSettingsMsg('error', 'Senha atual incorreta.'); return; }
+  if (newPass.length < 6)    { setSettingsMsg('error', 'A nova senha deve ter pelo menos 6 caracteres.'); return; }
+  if (newPass !== confirm)   { setSettingsMsg('error', 'A confirmação de senha não confere.'); return; }
+
+  saveAuth({ user: newUser, pass: newPass });
+
+  // Limpa campos sensíveis
+  document.getElementById('cfgCurrent').value = '';
+  document.getElementById('cfgNew').value     = '';
+  document.getElementById('cfgConfirm').value = '';
+
+  // Atualiza info exibida
+  const infoEl = document.getElementById('infoUser');
+  if (infoEl) infoEl.textContent = newUser;
+  document.getElementById('cfgUser').value = newUser;
+
+  setSettingsMsg('success', '✓ Credenciais atualizadas com sucesso!');
+  toast('🔒', 'Credenciais atualizadas');
+}
+
+function doLogout() {
+  sessionStorage.removeItem(SESSION_KEY);
+  document.getElementById('loginUser').value = '';
+  document.getElementById('loginPass').value = '';
+  document.getElementById('loginError').classList.remove('show');
+  document.getElementById('loginScreen').classList.remove('hidden');
+  document.getElementById('settingsNavBtn').classList.remove('active');
+}
+
+// ——— WRAP selectUser to deactivate settings btn ———
+// ——— SEED DATA (first run) ———
+function seedData() {
+  if (users.length > 0) return;
+
+  const seed_users = [
+    { id:'u_1', name:'Ana Souza', email:'ana@empresa.com', role:'Desenvolvedora', dept:'TI', color:'#00e5ff', createdAt: new Date().toISOString() },
+    { id:'u_2', name:'Carlos Lima', email:'carlos@empresa.com', role:'DevOps', dept:'Infraestrutura', color:'#7c3aed', createdAt: new Date().toISOString() },
+  ];
+
+  const seed_accesses = [
+    { id:'a_1', userId:'u_1', type:'web', name:'GitHub', url:'https://github.com', user:'ana.souza', pass:'gh_pass123', notes:'', createdAt: new Date().toISOString() },
+    { id:'a_2', userId:'u_1', type:'db', name:'PostgreSQL Prod', url:'db.empresa.com:5432', user:'ana_db', pass:'dbSecret!', notes:'Banco de produção', createdAt: new Date().toISOString() },
+    { id:'a_3', userId:'u_2', type:'server', name:'Servidor Web', url:'192.168.1.100', user:'root', pass:'srv@2024', notes:'SSH porta 22', createdAt: new Date().toISOString() },
+    { id:'a_4', userId:'u_2', type:'vpn', name:'VPN Corporativa', url:'vpn.empresa.com', user:'climalima', pass:'vpn!pass', notes:'', createdAt: new Date().toISOString() },
+  ];
+
+  users = seed_users;
+  accesses = seed_accesses;
+  save();
+}
+
+// ——— INIT ———
+
+// 1. Checar link de compartilhamento ANTES de qualquer outra coisa
+const _isSharedView = _checkShareParam();
+
+// 2. Só roda seedData se NÃO for modo compartilhado
+if (!_isSharedView) seedData();
+
+renderUsers(); renderGroups();
+
+if (_isSharedView) {
+  if (users.length > 0) selectUser(users[0].id);
+} else {
+  if (checkSession()) {
+    document.getElementById('loginScreen').classList.add('hidden');
+  }
+  document.getElementById('loginUser').focus();
+}
+</script>
+</body>
+</html>
