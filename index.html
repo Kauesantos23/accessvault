@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AccessVault — Gerenciador de Acessos</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -753,6 +754,22 @@
 
   .logout-btn:hover { background: rgba(239,68,68,0.12); border-color: rgba(239,68,68,0.4); }
 
+  .export-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 11px 18px;
+    border-radius: 8px;
+    background: rgba(16,185,129,0.06);
+    border: 1px solid rgba(16,185,129,0.2);
+    color: var(--accent3);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all .2s;
+  }
+  .export-btn:hover { background: rgba(16,185,129,0.12); border-color: rgba(16,185,129,0.4); }
+
   /* ——— SELECTION MODE ——— */
   .access-card.selectable { cursor: pointer; }
 
@@ -809,27 +826,48 @@
   /* ——— READONLY MODE ——— */
   .readonly-banner {
     position: fixed;
-    top: 0; left: 0; right: 0;
+    bottom: 16px;
+    right: 16px;
+    top: auto; left: auto;
     z-index: 9000;
     font-family: 'JetBrains Mono', monospace;
-    font-size: 12px;
-    font-weight: 600;
-    padding: 10px 20px;
+    font-size: 10px;
+    font-weight: 500;
+    padding: 6px 10px 6px 10px;
     display: flex;
     align-items: center;
-    justify-content: center;
-    gap: 10px;
-    letter-spacing: 0.3px;
-    box-shadow: 0 2px 20px rgba(0,0,0,.4);
+    gap: 6px;
+    letter-spacing: 0.2px;
+    border-radius: 20px;
+    box-shadow: 0 2px 12px rgba(0,0,0,.4);
+    opacity: 0.7;
+    transition: opacity .2s;
   }
 
-  .readonly-banner.mode-view   { background: linear-gradient(90deg, rgba(124,58,237,0.95), rgba(0,229,255,0.85)); color: #000; }
-  .readonly-banner.mode-editor { background: linear-gradient(90deg, rgba(16,185,129,0.95), rgba(0,229,255,0.80)); color: #000; }
+  .readonly-banner:hover { opacity: 1; }
 
-  .readonly-banner-icon { font-size: 15px; }
+  .readonly-banner.mode-view   { background: rgba(30,20,50,0.92); color: #a78bfa; border: 1px solid rgba(124,58,237,0.35); }
+  .readonly-banner.mode-editor { background: rgba(10,30,25,0.92); color: #6ee7b7; border: 1px solid rgba(16,185,129,0.35); }
 
-  body.readonly-mode .app    { margin-top: 40px; }
-  body.editor-mode   .app    { margin-top: 40px; }
+  .readonly-banner-icon { font-size: 11px; }
+
+  .readonly-banner-close {
+    background: rgba(255,255,255,0.1);
+    border: none;
+    border-radius: 50%;
+    width: 15px; height: 15px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 8px;
+    color: inherit;
+    cursor: pointer;
+    transition: background .15s;
+    flex-shrink: 0;
+    margin-left: 2px;
+  }
+  .readonly-banner-close:hover { background: rgba(255,255,255,0.25); }
+
+  body.readonly-mode .app    { margin-top: 0; }
+  body.editor-mode   .app    { margin-top: 0; }
 
   body.readonly-mode .add-user-btn,
   body.readonly-mode .btn-primary,
@@ -865,6 +903,7 @@
     pointer-events: none;
     transform: scale(1.04);
   }
+
 
   .editor-auth-box {
     width: 100%;
@@ -2413,6 +2452,18 @@
     <div class="modal-title">↗ Compartilhar Projeto</div>
     <div class="modal-sub">Escolha o tipo de acesso para quem vai receber o link</div>
 
+    <!-- JSONBin API Key -->
+    <div class="form-group" style="background:rgba(0,229,255,0.04);border:1px solid rgba(0,229,255,0.15);border-radius:10px;padding:14px;margin-bottom:16px">
+      <label class="form-label" style="color:var(--accent)">🔑 JSONBin API Key <span style="font-weight:400;color:var(--text3)">(necessária para gerar links)</span></label>
+      <div class="login-input-wrap">
+        <input class="form-input" type="password" id="jsonbinApiKey" placeholder="$2a$10$..." style="font-size:11px">
+        <button class="toggle-pass-btn" onclick="toggleSettingsPass('jsonbinApiKey')" title="Mostrar/ocultar">👁</button>
+      </div>
+      <div style="margin-top:8px;font-size:10px;color:var(--text3);line-height:1.6">
+        Gratuito em <a href="https://jsonbin.io" target="_blank" style="color:var(--accent)">jsonbin.io</a> → crie uma conta → copie a <strong style="color:var(--text2)">Master Key</strong> do painel.
+      </div>
+    </div>
+
     <!-- Tabs -->
     <div class="spm-tabs">
       <button class="spm-tab tab-view active" onclick="switchSpmTab('view',this)">👁 Somente leitura</button>
@@ -2425,7 +2476,7 @@
         ⚠️ O link contém <strong>todos os seus dados</strong>, incluindo senhas. Quem receber poderá <strong>apenas visualizar</strong> — sem editar ou excluir.
       </div>
       <div class="form-group">
-        <label class="form-label">Link de visualização</label>
+        <label class="form-label">Link gerado</label>
         <div class="share-link-box" id="shareLinkView">Clique em "Gerar link" para criar.</div>
       </div>
       <div class="modal-actions" style="justify-content:flex-end;gap:8px;padding-top:0">
@@ -2447,7 +2498,7 @@
         </div>
       </div>
       <div class="form-group">
-        <label class="form-label">Link de editor</label>
+        <label class="form-label">Link gerado</label>
         <div class="share-link-box" id="shareLinkEditor">Defina uma senha e clique em "Gerar link".</div>
       </div>
       <div class="modal-actions" style="justify-content:flex-end;gap:8px;padding-top:0">
@@ -4054,6 +4105,103 @@ function toast(icon, msg) {
   toastTimer = setTimeout(()=>el.classList.remove('show'), 2500);
 }
 
+// ——— EXPORT TO EXCEL ———
+function exportToExcel() {
+  try {
+    const wb = XLSX.utils.book_new();
+
+    // ── Sheet 1: Usuários e Acessos ──────────────────────────
+    const accessRows = [];
+    accessRows.push(['Usuário', 'E-mail', 'Cargo', 'Departamento', 'Tipo', 'Nome do Acesso', 'URL', 'Login', 'Senha', 'Notas', 'Adicionado em']);
+
+    users.forEach(u => {
+      const userAccesses = accesses.filter(a => a.userId === u.id);
+      if (userAccesses.length === 0) {
+        accessRows.push([u.name, u.email||'', u.role||'', u.dept||'', '', '', '', '', '', '', '']);
+      } else {
+        userAccesses.forEach((a, i) => {
+          accessRows.push([
+            i === 0 ? u.name    : '',
+            i === 0 ? (u.email||'') : '',
+            i === 0 ? (u.role||'')  : '',
+            i === 0 ? (u.dept||'')  : '',
+            typeLabels[a.type] || a.type,
+            a.name || '',
+            a.url  || '',
+            a.user || '',
+            a.pass || '',
+            a.notes || '',
+            a.createdAt ? new Date(a.createdAt).toLocaleDateString('pt-BR') : ''
+          ]);
+        });
+      }
+    });
+
+    const ws1 = XLSX.utils.aoa_to_sheet(accessRows);
+
+    // Column widths
+    ws1['!cols'] = [
+      {wch:22},{wch:28},{wch:18},{wch:18},
+      {wch:14},{wch:24},{wch:32},{wch:24},{wch:20},{wch:28},{wch:14}
+    ];
+
+    // Header style
+    const headerStyle = { font: { bold: true, color: { rgb: 'FFFFFF' } }, fill: { fgColor: { rgb: '111118' } }, alignment: { horizontal: 'center' } };
+    'ABCDEFGHIJK'.split('').forEach(col => {
+      const cell = ws1[col + '1'];
+      if (cell) cell.s = headerStyle;
+    });
+
+    XLSX.utils.book_append_sheet(wb, ws1, 'Usuários e Acessos');
+
+    // ── Sheet 2: Grupos e Acessos ────────────────────────────
+    const groupRows = [];
+    groupRows.push(['Grupo', 'Descrição', 'Membros', 'Tipo', 'Nome do Acesso', 'URL', 'Login', 'Senha', 'Notas', 'Adicionado em']);
+
+    groups.forEach(g => {
+      const gAccesses = groupAccesses.filter(a => a.groupId === g.id);
+      const memberNames = (g.members||[]).map(mid => {
+        const u = users.find(x => x.id === mid);
+        return u ? u.name : mid;
+      }).join(', ');
+
+      if (gAccesses.length === 0) {
+        groupRows.push([g.name, g.desc||'', memberNames, '', '', '', '', '', '', '']);
+      } else {
+        gAccesses.forEach((a, i) => {
+          groupRows.push([
+            i === 0 ? g.name        : '',
+            i === 0 ? (g.desc||'')  : '',
+            i === 0 ? memberNames   : '',
+            typeLabels[a.type] || a.type,
+            a.name || '',
+            a.url  || '',
+            a.user || '',
+            a.pass || '',
+            a.notes || '',
+            a.createdAt ? new Date(a.createdAt).toLocaleDateString('pt-BR') : ''
+          ]);
+        });
+      }
+    });
+
+    const ws2 = XLSX.utils.aoa_to_sheet(groupRows);
+    ws2['!cols'] = [
+      {wch:22},{wch:28},{wch:36},{wch:14},
+      {wch:24},{wch:32},{wch:24},{wch:20},{wch:28},{wch:14}
+    ];
+    XLSX.utils.book_append_sheet(wb, ws2, 'Grupos e Acessos');
+
+    // ── Download ─────────────────────────────────────────────
+    const date = new Date().toISOString().slice(0,10);
+    XLSX.writeFile(wb, `accessvault-${date}.xlsx`);
+    toast('📊', 'Excel exportado com sucesso!');
+  } catch(e) {
+    console.error(e);
+    toast('⚠️', 'Erro ao exportar — tente novamente');
+  }
+}
+
 // ——— EDITOR EXPORT ———
 function openEditorExportModal() {
   document.getElementById('editorExportCode').textContent = 'Clique em "Gerar código" para exportar.';
@@ -4224,16 +4372,21 @@ async function _hashPass(pass) {
 }
 
 function openShareProjectModal() {
-  ['shareLinkView','shareLinkEditor'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.textContent = id === 'shareLinkEditor'
-      ? 'Defina uma senha e clique em "Gerar link".'
-      : 'Clique em "Gerar link" para criar.';
-  });
+  const viewEl = document.getElementById('shareLinkView');
+  if (viewEl) viewEl.textContent = 'Clique em "Gerar link" para criar.';
+  const editEl = document.getElementById('shareLinkEditor');
+  if (editEl) editEl.textContent = 'Defina uma senha e clique em "Gerar link".';
   document.getElementById('copyShareLinkView').style.display   = 'none';
   document.getElementById('copyShareLinkEditor').style.display = 'none';
-  const p = document.getElementById('editorSharePass');
-  if (p) p.value = '';
+  const ep = document.getElementById('editorSharePass');
+  if (ep) ep.value = '';
+  // Restore saved API key
+  const savedKey = localStorage.getItem('av_jsonbin_key');
+  const keyField = document.getElementById('jsonbinApiKey');
+  if (savedKey && keyField) keyField.value = savedKey;
+  // Reset to first tab
+  document.querySelectorAll('.spm-tab').forEach((t,i) => t.classList.toggle('active', i===0));
+  document.querySelectorAll('.spm-panel').forEach((p,i) => p.classList.toggle('active', i===0));
   document.getElementById('shareProjectModal').classList.add('open');
 }
 
@@ -4244,16 +4397,26 @@ function switchSpmTab(tab, el) {
   document.getElementById('spm-' + tab).classList.add('active');
 }
 
-function _buildShareUrl(mode, passHash) {
-  const payload = { users, accesses, groups, groupAccesses, mode, passHash: passHash||null, exportedAt: new Date().toISOString() };
-  const json    = JSON.stringify(payload);
-  const bytes   = new TextEncoder().encode(json);
-  const binStr  = Array.from(bytes, b => String.fromCharCode(b)).join('');
-  const encoded = btoa(binStr);
-  return `${location.href.split('?')[0]}?share=${encodeURIComponent(encoded)}`;
+async function _uploadToJsonBin(payload, apiKey) {
+  const resp = await fetch('https://api.jsonbin.io/v3/b', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Master-Key': apiKey,
+      'X-Bin-Private': 'false',
+      'X-Bin-Name': `accessvault-${Date.now()}`
+    },
+    body: JSON.stringify(payload)
+  });
+  if (!resp.ok) throw new Error(`JSONBin error: ${resp.status}`);
+  const data = await resp.json();
+  return data.metadata.id;
 }
 
 async function generateShareLink(mode) {
+  const apiKey = document.getElementById('jsonbinApiKey').value.trim();
+  if (!apiKey) { toast('⚠️', 'Informe a API Key do JSONBin'); return; }
+
   try {
     let passHash = null;
     if (mode === 'editor') {
@@ -4261,7 +4424,14 @@ async function generateShareLink(mode) {
       if (!pass) { toast('⚠️', 'Defina uma senha para o link de editor'); return; }
       passHash = await _hashPass(pass);
     }
-    const url = _buildShareUrl(mode, passHash);
+
+    toast('⏳', 'Enviando dados...');
+    const payload = { users, accesses, groups, groupAccesses, mode, passHash, exportedAt: new Date().toISOString() };
+    const binId   = await _uploadToJsonBin(payload, apiKey);
+    const url     = `${location.href.split('?')[0]}?bin=${encodeURIComponent(binId)}`;
+
+    localStorage.setItem('av_jsonbin_key', apiKey);
+
     if (mode === 'view') {
       document.getElementById('shareLinkView').textContent = url;
       document.getElementById('copyShareLinkView').style.display = 'inline-flex';
@@ -4271,7 +4441,10 @@ async function generateShareLink(mode) {
       document.getElementById('copyShareLinkEditor').style.display = 'inline-flex';
       toast('🔗', 'Link de editor gerado!');
     }
-  } catch(e) { toast('⚠️', 'Erro ao gerar link'); }
+  } catch(e) {
+    console.error(e);
+    toast('⚠️', 'Erro ao gerar link — verifique a API Key');
+  }
 }
 
 function copyLinkView()   { navigator.clipboard.writeText(document.getElementById('shareLinkView').textContent).then(()=>toast('⎘','Link copiado!')); }
@@ -4288,6 +4461,8 @@ function doEditorAuth() {
       screen.classList.add('hidden');
       setTimeout(() => { screen.style.display = 'none'; }, 400);
       _activateEditorMode(_pendingEditorPayload);
+      renderUsers(); renderGroups();
+      if (users.length > 0) selectUser(users[0].id);
     } else {
       err.classList.add('show');
       input.value = '';
@@ -4301,8 +4476,8 @@ function _activateEditorMode(payload) {
   banner.className = 'readonly-banner mode-editor';
   banner.innerHTML = `
     <span class="readonly-banner-icon">✏️</span>
-    <span>Modo editor — suas alterações ficam salvas no seu navegador</span>
-    ${payload.exportedAt ? `<span style="opacity:.6;font-weight:400">· dados de ${new Date(payload.exportedAt).toLocaleDateString('pt-BR')}</span>` : ''}
+    <span>Modo editor</span>
+    <button class="readonly-banner-close" onclick="this.closest('.readonly-banner').style.display='none'" title="Fechar">✕</button>
   `;
   document.body.prepend(banner);
   document.body.classList.add('editor-mode');
@@ -4323,8 +4498,8 @@ function _enterReadonlyMode(payload) {
     banner.className = 'readonly-banner mode-view';
     banner.innerHTML = `
       <span class="readonly-banner-icon">👁</span>
-      <span>Modo somente leitura — você está visualizando dados compartilhados</span>
-      ${payload.exportedAt ? `<span style="opacity:.6;font-weight:400">· exportado em ${new Date(payload.exportedAt).toLocaleDateString('pt-BR')}</span>` : ''}
+      <span>Somente leitura</span>
+      <button class="readonly-banner-close" onclick="this.closest('.readonly-banner').style.display='none'" title="Fechar">✕</button>
     `;
     document.body.prepend(banner);
     document.body.classList.add('readonly-mode');
@@ -4343,19 +4518,45 @@ function _enterReadonlyMode(payload) {
 
 function _checkShareParam() {
   const params = new URLSearchParams(location.search);
-  const share  = params.get('share');
-  if (!share) return false;
-  try {
-    const binStr  = atob(share);
-    const bytes   = Uint8Array.from(binStr, c => c.charCodeAt(0));
-    const json    = new TextDecoder().decode(bytes);
-    const payload = JSON.parse(json);
-    _enterReadonlyMode(payload);
+  const binId  = params.get('bin');
+  const share  = params.get('share'); // legacy fallback
+
+  if (binId) {
+    document.getElementById('loginScreen').style.display = 'none';
+    document.body.innerHTML += `<div id="loadingScreen" style="position:fixed;inset:0;z-index:20000;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;font-family:'JetBrains Mono',monospace">
+      <div style="font-size:32px">🔐</div>
+      <div style="color:var(--accent);font-size:13px">Carregando dados compartilhados...</div>
+    </div>`;
+    fetch(`https://api.jsonbin.io/v3/b/${binId}/latest`, { headers: { 'X-Bin-Meta': 'false' } })
+      .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then(payload => {
+        document.getElementById('loadingScreen')?.remove();
+        _enterReadonlyMode(payload);
+        renderUsers(); renderGroups();
+        if (users.length > 0 && !payload.passHash) selectUser(users[0].id);
+      })
+      .catch(e => {
+        document.getElementById('loadingScreen')?.remove();
+        document.body.innerHTML += `<div style="position:fixed;inset:0;z-index:20000;background:var(--bg);display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;color:var(--danger);font-size:13px">❌ Link inválido ou expirado.</div>`;
+      });
     return true;
-  } catch(e) {
-    console.warn('AccessVault: link inválido.', e);
-    return false;
   }
+
+  if (share) {
+    try {
+      const binStr  = atob(share);
+      const bytes   = Uint8Array.from(binStr, c => c.charCodeAt(0));
+      const json    = new TextDecoder().decode(bytes);
+      const payload = JSON.parse(json);
+      _enterReadonlyMode(payload);
+      return true;
+    } catch(e) {
+      console.warn('AccessVault: link inválido.', e);
+      return false;
+    }
+  }
+
+  return false;
 }
 
 // ——— AUTH ———
@@ -4504,6 +4705,13 @@ function openSettings() {
         <div class="modal-actions" style="justify-content:flex-start;margin-top:16px;gap:8px">
           <button class="btn btn-primary" style="background:var(--accent3);color:#000" onclick="doSync()">🔄 Mesclar alterações</button>
         </div>
+      </div>
+
+      <!-- Exportar -->
+      <div class="settings-section">
+        <div class="settings-section-title">📊 Exportar</div>
+        <div class="settings-section-sub">Exporte todos os dados para uma planilha Excel.</div>
+        <button class="export-btn" onclick="exportToExcel()">📊 Exportar para Excel (.xlsx)</button>
       </div>
 
       <!-- Sessão -->
