@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AccessVault — Gerenciador de Acessos</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.5.0/lz-string.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -888,22 +887,6 @@
     transform: scale(1.04);
   }
 
-  #viewerAuthScreen {
-    position: fixed;
-    inset: 0;
-    z-index: 10000;
-    background: var(--bg);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: opacity .4s ease, transform .4s ease;
-  }
-
-  #viewerAuthScreen.hidden {
-    opacity: 0;
-    pointer-events: none;
-    transform: scale(1.04);
-  }
 
   .editor-auth-box {
     width: 100%;
@@ -2452,6 +2435,8 @@
     <div class="modal-title">↗ Compartilhar Projeto</div>
     <div class="modal-sub">Escolha o tipo de acesso para quem vai receber o link</div>
 
+
+
     <!-- Tabs -->
     <div class="spm-tabs">
       <button class="spm-tab tab-view active" onclick="switchSpmTab('view',this)">👁 Somente leitura</button>
@@ -2461,18 +2446,11 @@
     <!-- Panel: Visualização -->
     <div class="spm-panel active" id="spm-view">
       <div class="share-link-warning">
-        ⚠️ O link contém <strong>todos os seus dados</strong>, incluindo senhas. Quem receber precisará digitar a senha para <strong>visualizar</strong>.
-      </div>
-      <div class="form-group">
-        <label class="form-label">Senha do visualizador</label>
-        <div class="login-input-wrap">
-          <input class="form-input" type="password" id="viewSharePass" placeholder="Digite uma senha para o link de visualização">
-          <button class="toggle-pass-btn" onclick="toggleSettingsPass('viewSharePass')" title="Mostrar/ocultar">👁</button>
-        </div>
+        ⚠️ O link contém <strong>todos os seus dados</strong>, incluindo senhas. Quem receber poderá <strong>apenas visualizar</strong> — sem editar ou excluir.
       </div>
       <div class="form-group">
         <label class="form-label">Link de visualização</label>
-        <div class="share-link-box" id="shareLinkView">Defina uma senha e clique em "Gerar link".</div>
+        <div class="share-link-box" id="shareLinkView">Clique em "Gerar link" para criar.</div>
       </div>
       <div class="modal-actions" style="justify-content:flex-end;gap:8px;padding-top:0">
         <button class="btn btn-ghost" id="copyShareLinkView" onclick="copyLinkView()" style="display:none">⎘ Copiar</button>
@@ -2505,26 +2483,6 @@
     <div style="padding-top:16px;border-top:1px solid var(--border);margin-top:4px;text-align:right">
       <button class="btn btn-ghost" onclick="closeModal('shareProjectModal')">Fechar</button>
     </div>
-  </div>
-</div>
-
-<!-- VIEWER AUTH SCREEN -->
-<div id="viewerAuthScreen" style="display:none">
-  <div class="editor-auth-box" style="border-color:rgba(124,58,237,0.3);box-shadow:0 0 60px rgba(124,58,237,0.08)">
-    <div class="editor-auth-logo">
-      <div class="editor-auth-icon">👁</div>
-      <div class="editor-auth-title">Acesso de Visualização</div>
-      <div class="editor-auth-sub">Digite a senha para visualizar os dados</div>
-    </div>
-    <div class="editor-auth-error" id="viewerAuthError">Senha incorreta. Tente novamente.</div>
-    <div class="form-group">
-      <label class="form-label">Senha</label>
-      <div class="login-input-wrap">
-        <input class="form-input" type="password" id="viewerAuthInput" placeholder="Digite a senha" onkeydown="if(event.key==='Enter')doViewerAuth()">
-        <button class="toggle-pass-btn" onclick="toggleSettingsPass('viewerAuthInput')" title="Mostrar/ocultar">👁</button>
-      </div>
-    </div>
-    <button class="editor-auth-btn" style="background:var(--accent);color:#000" onclick="doViewerAuth()">Entrar →</button>
   </div>
 </div>
 
@@ -4290,14 +4248,12 @@ async function _hashPass(pass) {
 }
 
 function openShareProjectModal() {
-  ['shareLinkView','shareLinkEditor'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.textContent = 'Defina uma senha e clique em "Gerar link".';
-  });
+  const viewEl = document.getElementById('shareLinkView');
+  if (viewEl) viewEl.textContent = 'Clique em "Gerar link" para criar.';
+  const editEl = document.getElementById('shareLinkEditor');
+  if (editEl) editEl.textContent = 'Defina uma senha e clique em "Gerar link".';
   document.getElementById('copyShareLinkView').style.display   = 'none';
   document.getElementById('copyShareLinkEditor').style.display = 'none';
-  const vp = document.getElementById('viewSharePass');
-  if (vp) vp.value = '';
   const ep = document.getElementById('editorSharePass');
   if (ep) ep.value = '';
   document.getElementById('shareProjectModal').classList.add('open');
@@ -4312,20 +4268,17 @@ function switchSpmTab(tab, el) {
 
 function _buildShareUrl(mode, passHash) {
   const payload = { users, accesses, groups, groupAccesses, mode, passHash: passHash||null, exportedAt: new Date().toISOString() };
-  const json     = JSON.stringify(payload);
-  // LZString compresses then encodes to URL-safe base64 (~60-70% smaller than raw base64)
-  const compressed = LZString.compressToEncodedURIComponent(json);
-  return `${location.href.split('?')[0]}?share=${compressed}`;
+  const json    = JSON.stringify(payload);
+  const bytes   = new TextEncoder().encode(json);
+  const binStr  = Array.from(bytes, b => String.fromCharCode(b)).join('');
+  const encoded = btoa(binStr);
+  return `${location.href.split('?')[0]}?share=${encodeURIComponent(encoded)}`;
 }
 
 async function generateShareLink(mode) {
   try {
     let passHash = null;
-    if (mode === 'view') {
-      const pass = document.getElementById('viewSharePass').value;
-      if (!pass) { toast('⚠️', 'Defina uma senha para o link de visualização'); return; }
-      passHash = await _hashPass(pass);
-    } else if (mode === 'editor') {
+    if (mode === 'editor') {
       const pass = document.getElementById('editorSharePass').value;
       if (!pass) { toast('⚠️', 'Defina uma senha para o link de editor'); return; }
       passHash = await _hashPass(pass);
@@ -4346,41 +4299,6 @@ async function generateShareLink(mode) {
 function copyLinkView()   { navigator.clipboard.writeText(document.getElementById('shareLinkView').textContent).then(()=>toast('⎘','Link copiado!')); }
 function copyLinkEditor() { navigator.clipboard.writeText(document.getElementById('shareLinkEditor').textContent).then(()=>toast('⎘','Link copiado!')); }
 function copyShareLink()  { copyLinkView(); }
-
-let _pendingViewerPayload = null;
-
-function doViewerAuth() {
-  const input = document.getElementById('viewerAuthInput');
-  const err   = document.getElementById('viewerAuthError');
-  _hashPass(input.value).then(hash => {
-    if (_pendingViewerPayload && hash === _pendingViewerPayload.passHash) {
-      err.classList.remove('show');
-      const screen = document.getElementById('viewerAuthScreen');
-      screen.classList.add('hidden');
-      setTimeout(() => { screen.style.display = 'none'; }, 400);
-      _activateViewerMode(_pendingViewerPayload);
-      renderUsers(); renderGroups();
-      if (users.length > 0) selectUser(users[0].id);
-    } else {
-      err.classList.add('show');
-      input.value = '';
-      input.focus();
-    }
-  });
-}
-
-function _activateViewerMode(payload) {
-  save = function() {};
-  const banner = document.createElement('div');
-  banner.className = 'readonly-banner mode-view';
-  banner.innerHTML = `
-    <span class="readonly-banner-icon">👁</span>
-    <span>Somente leitura</span>
-    <button class="readonly-banner-close" onclick="this.closest('.readonly-banner').style.display='none'" title="Fechar">✕</button>
-  `;
-  document.body.prepend(banner);
-  document.body.classList.add('readonly-mode');
-}
 
 function doEditorAuth() {
   const input = document.getElementById('editorAuthInput');
@@ -4423,14 +4341,17 @@ function _enterReadonlyMode(payload) {
   document.getElementById('loginScreen').style.display = 'none';
 
   if (mode === 'view') {
-    if (payload.passHash) {
-      _pendingViewerPayload = payload;
-      const screen = document.getElementById('viewerAuthScreen');
-      screen.style.display = 'flex';
-      setTimeout(() => document.getElementById('viewerAuthInput').focus(), 100);
-    } else {
-      _activateViewerMode(payload);
-    }
+    save = function() {};
+    _readonlyMode = true;
+    const banner = document.createElement('div');
+    banner.className = 'readonly-banner mode-view';
+    banner.innerHTML = `
+      <span class="readonly-banner-icon">👁</span>
+      <span>Somente leitura</span>
+      <button class="readonly-banner-close" onclick="this.closest('.readonly-banner').style.display='none'" title="Fechar">✕</button>
+    `;
+    document.body.prepend(banner);
+    document.body.classList.add('readonly-mode');
 
   } else if (mode === 'editor') {
     if (payload.passHash) {
@@ -4449,14 +4370,9 @@ function _checkShareParam() {
   const share  = params.get('share');
   if (!share) return false;
   try {
-    // Try LZString decompression first (new links)
-    let json = LZString.decompressFromEncodedURIComponent(share);
-    // Fallback: old base64 links
-    if (!json) {
-      const binStr = atob(share);
-      const bytes  = Uint8Array.from(binStr, c => c.charCodeAt(0));
-      json = new TextDecoder().decode(bytes);
-    }
+    const binStr  = atob(share);
+    const bytes   = Uint8Array.from(binStr, c => c.charCodeAt(0));
+    const json    = new TextDecoder().decode(bytes);
     const payload = JSON.parse(json);
     _enterReadonlyMode(payload);
     return true;
